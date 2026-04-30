@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+anthropic
+pymupdf
+python-docx
+python-dotenv
+httpx
+pytest
+ruff
+# supabase  — add in Phase 6 (requires C++ build tools on Windows for pyiceberg dep)
