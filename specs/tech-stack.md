@@ -40,9 +40,10 @@ The three internal agents have different complexity profiles; model selection re
 ## Testing
 
 - **pytest** — backend unit and integration tests for agent logic and API routes
-- **Vitest** — frontend component and utility tests
+- **Vitest** — frontend component and utility tests; configured in `frontend/vitest.config.ts` with jsdom environment and `@testing-library/react`
+- Frontend test setup file lives at `frontend/src/test/setup.ts` (imports `@testing-library/jest-dom` matchers)
 - Tests live in a `tests/` directory at each layer
-- Run via `pytest` (backend) and `npm test` (frontend); both must pass before merge
+- Run via `pytest` (backend) and `npm test` (frontend, watch mode) or `npm run test:run` (frontend, CI single-pass); both must pass before merge
 
 ## Tooling
 
