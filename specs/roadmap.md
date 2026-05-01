@@ -10,7 +10,7 @@ Phases are intentionally focused — each one is a shippable slice of work, inde
 - Confirms split deployment pipeline: Render ↔ Vercel communication works end-to-end
 - Environment variable wiring in place (API base URL configurable per environment)
 
-## Phase 2 — Document Ingestion
+## Phase 2 — Document Ingestion ✅
 - File upload UI in Next.js (drag-and-drop or file picker, PDF and DOCX only)
 - `POST /upload` endpoint in FastAPI receives the file
 - PyMuPDF extracts text from PDF; python-docx extracts text from DOCX
