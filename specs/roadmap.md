@@ -4,7 +4,7 @@ Phases are intentionally focused — each one is a shippable slice of work, inde
 
 ---
 
-## Phase 1 — Hello LexGuard
+## Phase 1 — Hello LexGuard ✅
 - FastAPI app running locally and on Render, single `GET /health` route returning `{ "status": "LexGuard is live" }`
 - Next.js app running locally and on Vercel, fetches `/health` and renders the response
 - Confirms split deployment pipeline: Render ↔ Vercel communication works end-to-end
