@@ -11,10 +11,12 @@ type State =
   | { phase: "idle" }
   | { phase: "loading" }
   | { phase: "extracting"; filename: string; text: string }
+  | { phase: "investigating"; filename: string; citations: Citation[] }
   | { phase: "citations"; filename: string; citations: Citation[] }
   | { phase: "no_citations"; filename: string; text: string }
   | { phase: "upload_error"; message: string }
-  | { phase: "extract_error"; message: string; filename: string; text: string };
+  | { phase: "extract_error"; message: string; filename: string; text: string }
+  | { phase: "investigate_error"; message: string; filename: string; citations: Citation[] };
 
 function Spinner({ label }: { label: string }) {
   return (
@@ -30,6 +32,25 @@ function Spinner({ label }: { label: string }) {
 
 export default function Home() {
   const [state, setState] = useState<State>({ phase: "idle" });
+
+  async function runInvestigate(filename: string, citations: Citation[]) {
+    setState({ phase: "investigating", filename, citations });
+    try {
+      const res = await fetch(`${API_URL}/investigate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citations }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setState({ phase: "investigate_error", message: data.detail ?? "Investigation failed.", filename, citations });
+        return;
+      }
+      setState({ phase: "citations", filename, citations: data.citations });
+    } catch {
+      setState({ phase: "investigate_error", message: "Could not reach the API. Is the backend running?", filename, citations });
+    }
+  }
 
   async function runExtract(filename: string, text: string) {
     setState({ phase: "extracting", filename, text });
@@ -48,7 +69,7 @@ export default function Home() {
       if (citations.length === 0) {
         setState({ phase: "no_citations", filename, text });
       } else {
-        setState({ phase: "citations", filename, citations });
+        await runInvestigate(filename, citations);
       }
     } catch {
       setState({ phase: "extract_error", message: "Could not reach the API. Is the backend running?", filename, text });
@@ -86,20 +107,14 @@ export default function Home() {
 
       {state.phase === "extracting" && <Spinner label="Extrayendo citas…" />}
 
+      {state.phase === "investigating" && <Spinner label="Verificando citas…" />}
+
       {state.phase === "citations" && (
-        <CitationList
-          filename={state.filename}
-          citations={state.citations}
-          onReset={reset}
-        />
+        <CitationList filename={state.filename} citations={state.citations} onReset={reset} />
       )}
 
       {state.phase === "no_citations" && (
-        <TextPanel
-          filename={state.filename}
-          text={state.text}
-          onReset={reset}
-        />
+        <TextPanel filename={state.filename} text={state.text} onReset={reset} />
       )}
 
       {state.phase === "upload_error" && (
@@ -113,17 +128,26 @@ export default function Home() {
         <div className="flex flex-col items-center gap-4">
           <p className="text-red-400 text-sm text-center max-w-sm">{state.message}</p>
           <div className="flex gap-3">
-            <button
-              onClick={() => runExtract(state.filename, state.text)}
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-            >
+            <button onClick={() => runExtract(state.filename, state.text)} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
               Try again
             </button>
             <span className="text-zinc-600">·</span>
-            <button
-              onClick={reset}
-              className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
-            >
+            <button onClick={reset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
+              Upload another document
+            </button>
+          </div>
+        </div>
+      )}
+
+      {state.phase === "investigate_error" && (
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-red-400 text-sm text-center max-w-sm">{state.message}</p>
+          <div className="flex gap-3">
+            <button onClick={() => runInvestigate(state.filename, state.citations)} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+              Try again
+            </button>
+            <span className="text-zinc-600">·</span>
+            <button onClick={reset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
               Upload another document
             </button>
           </div>

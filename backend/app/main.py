@@ -6,6 +6,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 from app.services.agent_extractor import extract_citations
+from app.services.agent_investigator_stub import investigate_citations
 from app.services.extractor import extract_docx, extract_pdf
 
 app = FastAPI(title="LexGuard API")
@@ -23,6 +24,10 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx"}
 
 class ExtractRequest(BaseModel):
     text: str
+
+
+class InvestigateRequest(BaseModel):
+    citations: list[dict]
 
 
 @app.get("/health")
@@ -61,3 +66,13 @@ async def extract(req: ExtractRequest):
         raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}")
 
     return {"citations": citations}
+
+
+@app.post("/investigate")
+async def investigate(req: InvestigateRequest):
+    try:
+        results = investigate_citations(req.citations)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
+
+    return {"citations": results}
