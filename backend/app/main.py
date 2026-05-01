@@ -1,6 +1,11 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+load_dotenv()
+
+from app.services.agent_extractor import extract_citations
 from app.services.extractor import extract_docx, extract_pdf
 
 app = FastAPI(title="LexGuard API")
@@ -14,6 +19,10 @@ app.add_middleware(
 
 MAX_UPLOAD_BYTES = 1 * 1024 * 1024  # 1 MB
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+
+
+class ExtractRequest(BaseModel):
+    text: str
 
 
 @app.get("/health")
@@ -40,3 +49,15 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}")
 
     return {"filename": filename, "text": text}
+
+
+@app.post("/extract")
+async def extract(req: ExtractRequest):
+    try:
+        citations = extract_citations(req.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}")
+
+    return {"citations": citations}
