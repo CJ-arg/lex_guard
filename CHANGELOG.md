@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-05-01
+- Add changelog skill and generate initial CHANGELOG.md
+
 ## 2026-04-30
 - Replan: add Vitest testing setup to frontend
 - Mark Phase 1 complete in roadmap
