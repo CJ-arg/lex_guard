@@ -3,6 +3,8 @@ interface Citation {
   case_name: string;
   court: string;
   year_tomo_folio: string | null;
+  found?: boolean;
+  ruling_text?: string | null;
 }
 
 interface Props {
@@ -13,8 +15,18 @@ interface Props {
 export default function CitationCard({ citation, index }: Props) {
   return (
     <div className="border border-zinc-700 rounded-xl p-5 flex flex-col gap-3 bg-zinc-900">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between">
         <span className="text-xs font-mono text-zinc-500">#{index + 1}</span>
+        {citation.found === true && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800">
+            Encontrado ✓
+          </span>
+        )}
+        {citation.found === false && (
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-800">
+            No encontrado ✗
+          </span>
+        )}
       </div>
 
       <p className="text-zinc-100 text-sm leading-relaxed">
