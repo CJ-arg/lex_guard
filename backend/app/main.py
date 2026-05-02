@@ -9,6 +9,7 @@ from app.services.agent_extractor import extract_citations
 from app.services.agent_investigator_stub import investigate_citations
 from app.services.agent_judge import judge_citations
 from app.services.extractor import extract_docx, extract_pdf
+from app.services.sessions import get_session, save_session
 
 app = FastAPI(title="LexGuard API")
 
@@ -28,6 +29,12 @@ class ExtractRequest(BaseModel):
 
 
 class InvestigateRequest(BaseModel):
+    citations: list[dict]
+
+
+class SaveSessionRequest(BaseModel):
+    document_name: str
+    user_note: str | None = None
     citations: list[dict]
 
 
@@ -77,6 +84,26 @@ async def investigate(req: InvestigateRequest):
         raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
 
     return {"citations": results}
+
+
+@app.post("/sessions")
+async def create_session(req: SaveSessionRequest):
+    try:
+        session_id = save_session(req.document_name, req.user_note, req.citations)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not save session: {exc}")
+    return {"session_id": session_id}
+
+
+@app.get("/sessions/{session_id}")
+async def read_session(session_id: str):
+    try:
+        session = get_session(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not retrieve session: {exc}")
+    return session
 
 
 @app.post("/judge")
