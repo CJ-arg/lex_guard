@@ -7,6 +7,7 @@ load_dotenv()
 
 from app.services.agent_extractor import extract_citations
 from app.services.agent_investigator_stub import investigate_citations
+from app.services.agent_judge import judge_citations
 from app.services.extractor import extract_docx, extract_pdf
 
 app = FastAPI(title="LexGuard API")
@@ -74,5 +75,17 @@ async def investigate(req: InvestigateRequest):
         results = investigate_citations(req.citations)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
+
+    return {"citations": results}
+
+
+@app.post("/judge")
+async def judge(req: InvestigateRequest):
+    try:
+        results = judge_citations(req.citations)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Judge failed: {exc}")
 
     return {"citations": results}
