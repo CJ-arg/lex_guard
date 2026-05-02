@@ -12,11 +12,13 @@ type State =
   | { phase: "loading" }
   | { phase: "extracting"; filename: string; text: string }
   | { phase: "investigating"; filename: string; citations: Citation[] }
+  | { phase: "judging"; filename: string; citations: Citation[] }
   | { phase: "citations"; filename: string; citations: Citation[] }
   | { phase: "no_citations"; filename: string; text: string }
   | { phase: "upload_error"; message: string }
   | { phase: "extract_error"; message: string; filename: string; text: string }
-  | { phase: "investigate_error"; message: string; filename: string; citations: Citation[] };
+  | { phase: "investigate_error"; message: string; filename: string; citations: Citation[] }
+  | { phase: "judge_error"; message: string; filename: string; citations: Citation[] };
 
 function Spinner({ label }: { label: string }) {
   return (
@@ -30,8 +32,44 @@ function Spinner({ label }: { label: string }) {
   );
 }
 
+function ErrorActions({ message, onRetry, onReset }: { message: string; onRetry: () => void; onReset: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <p className="text-red-400 text-sm text-center max-w-sm">{message}</p>
+      <div className="flex gap-3">
+        <button onClick={onRetry} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+          Try again
+        </button>
+        <span className="text-zinc-600">·</span>
+        <button onClick={onReset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
+          Upload another document
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [state, setState] = useState<State>({ phase: "idle" });
+
+  async function runJudge(filename: string, citations: Citation[]) {
+    setState({ phase: "judging", filename, citations });
+    try {
+      const res = await fetch(`${API_URL}/judge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ citations }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setState({ phase: "judge_error", message: data.detail ?? "Judge failed.", filename, citations });
+        return;
+      }
+      setState({ phase: "citations", filename, citations: data.citations });
+    } catch {
+      setState({ phase: "judge_error", message: "Could not reach the API. Is the backend running?", filename, citations });
+    }
+  }
 
   async function runInvestigate(filename: string, citations: Citation[]) {
     setState({ phase: "investigating", filename, citations });
@@ -46,7 +84,7 @@ export default function Home() {
         setState({ phase: "investigate_error", message: data.detail ?? "Investigation failed.", filename, citations });
         return;
       }
-      setState({ phase: "citations", filename, citations: data.citations });
+      await runJudge(filename, data.citations);
     } catch {
       setState({ phase: "investigate_error", message: "Could not reach the API. Is the backend running?", filename, citations });
     }
@@ -93,26 +131,21 @@ export default function Home() {
     }
   }
 
-  function reset() {
-    setState({ phase: "idle" });
-  }
+  function reset() { setState({ phase: "idle" }); }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 px-4 py-12">
       <h1 className="text-3xl font-bold tracking-tight">LexGuard</h1>
 
       {state.phase === "idle" && <UploadZone onFile={handleFile} />}
-
       {state.phase === "loading" && <Spinner label="Subiendo documento…" />}
-
       {state.phase === "extracting" && <Spinner label="Extrayendo citas…" />}
-
       {state.phase === "investigating" && <Spinner label="Verificando citas…" />}
+      {state.phase === "judging" && <Spinner label="Evaluando citas…" />}
 
       {state.phase === "citations" && (
         <CitationList filename={state.filename} citations={state.citations} onReset={reset} />
       )}
-
       {state.phase === "no_citations" && (
         <TextPanel filename={state.filename} text={state.text} onReset={reset} />
       )}
@@ -123,35 +156,14 @@ export default function Home() {
           <UploadZone onFile={handleFile} />
         </>
       )}
-
       {state.phase === "extract_error" && (
-        <div className="flex flex-col items-center gap-4">
-          <p className="text-red-400 text-sm text-center max-w-sm">{state.message}</p>
-          <div className="flex gap-3">
-            <button onClick={() => runExtract(state.filename, state.text)} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-              Try again
-            </button>
-            <span className="text-zinc-600">·</span>
-            <button onClick={reset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
-              Upload another document
-            </button>
-          </div>
-        </div>
+        <ErrorActions message={state.message} onRetry={() => runExtract(state.filename, state.text)} onReset={reset} />
       )}
-
       {state.phase === "investigate_error" && (
-        <div className="flex flex-col items-center gap-4">
-          <p className="text-red-400 text-sm text-center max-w-sm">{state.message}</p>
-          <div className="flex gap-3">
-            <button onClick={() => runInvestigate(state.filename, state.citations)} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-              Try again
-            </button>
-            <span className="text-zinc-600">·</span>
-            <button onClick={reset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
-              Upload another document
-            </button>
-          </div>
-        </div>
+        <ErrorActions message={state.message} onRetry={() => runInvestigate(state.filename, state.citations)} onReset={reset} />
+      )}
+      {state.phase === "judge_error" && (
+        <ErrorActions message={state.message} onRetry={() => runJudge(state.filename, state.citations)} onReset={reset} />
       )}
     </main>
   );

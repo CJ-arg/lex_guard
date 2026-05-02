@@ -5,6 +5,8 @@ interface Citation {
   year_tomo_folio: string | null;
   found?: boolean;
   ruling_text?: string | null;
+  verdict?: "approved" | "warning" | "danger";
+  justification?: string;
 }
 
 interface Props {
@@ -12,21 +14,48 @@ interface Props {
   index: number;
 }
 
+const VERDICT_STYLES = {
+  approved: "bg-green-900/40 text-green-400 border-green-800",
+  warning: "bg-yellow-900/40 text-yellow-400 border-yellow-800",
+  danger: "bg-red-900/40 text-red-400 border-red-800",
+};
+
+const VERDICT_LABELS = {
+  approved: "Aprobado ✓",
+  warning: "Advertencia ⚠",
+  danger: "Peligro ✗",
+};
+
+function VerdictBadge({ verdict }: { verdict: "approved" | "warning" | "danger" }) {
+  return (
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${VERDICT_STYLES[verdict]}`}>
+      {VERDICT_LABELS[verdict]}
+    </span>
+  );
+}
+
+function FoundBadge({ found }: { found: boolean }) {
+  return found ? (
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800">
+      Encontrado ✓
+    </span>
+  ) : (
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-800">
+      No encontrado ✗
+    </span>
+  );
+}
+
 export default function CitationCard({ citation, index }: Props) {
   return (
     <div className="border border-zinc-700 rounded-xl p-5 flex flex-col gap-3 bg-zinc-900">
       <div className="flex items-center justify-between">
         <span className="text-xs font-mono text-zinc-500">#{index + 1}</span>
-        {citation.found === true && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800">
-            Encontrado ✓
-          </span>
-        )}
-        {citation.found === false && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-900/40 text-red-400 border border-red-800">
-            No encontrado ✗
-          </span>
-        )}
+        {citation.verdict !== undefined ? (
+          <VerdictBadge verdict={citation.verdict} />
+        ) : citation.found !== undefined ? (
+          <FoundBadge found={citation.found} />
+        ) : null}
       </div>
 
       <p className="text-zinc-100 text-sm leading-relaxed">
@@ -53,6 +82,13 @@ export default function CitationCard({ citation, index }: Props) {
           </p>
         )}
       </div>
+
+      {citation.justification && (
+        <div className="border-t border-zinc-700 pt-3">
+          <p className="text-zinc-500 text-xs uppercase tracking-wide mb-1">Justificación</p>
+          <p className="text-zinc-300 text-sm leading-relaxed">{citation.justification}</p>
+        </div>
+      )}
     </div>
   );
 }
