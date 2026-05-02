@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-05-02
+- Phase 6: Supabase persistence — save sessions, permalink, read-only view (#5)
+
 ## 2026-05-01
 - Add changelog skill and generate initial CHANGELOG.md
 

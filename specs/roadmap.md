@@ -17,27 +17,27 @@ Phases are intentionally focused — each one is a shippable slice of work, inde
 - Extracted plain text returned to frontend and displayed — no agents yet
 - Basic validation: file type check, size limit
 
-## Phase 3 — Extractor Agent
+## Phase 3 — Extractor Agent ✅
 - Wire Claude Haiku as the Extractor agent
 - Input: extracted plain text from Phase 2
 - Output: structured list of citation objects — attorney claim, case name, court, year, tomo/folio
 - Display extracted citations as a simple list in the UI
 - Edge case: multiple citations in a single paragraph (chained citations) handled here
 
-## Phase 4 — Investigator Agent (Stubbed)
+## Phase 4 — Investigator Agent (Stubbed) ✅
 - Add the Investigator agent with a deterministic stub: returns `found: true` with placeholder ruling text for known test cases, `found: false` otherwise
 - Define the full data contract the real Investigator will honor (input/output schema locked here)
 - Pipeline runs: Extractor → Investigator stub → JSON result displayed per citation
 - Fuzzy-match helper introduced (Levenshtein on case name + year) — ready for Phase 7
 
-## Phase 5 — Judge Agent & Traffic-Light Dashboard
+## Phase 5 — Judge Agent & Traffic-Light Dashboard ✅
 - Wire Claude Sonnet 4.6 as the Judge agent
 - Full pipeline operational: Extractor → Investigator (stub) → Judge
 - Judge returns verdict (`approved` / `warning` / `danger`) + plain-language justification per citation
 - Dashboard displays the original document alongside the verdict panel: green / yellow / red per citation with justification text
 - This is the first end-to-end demo of the product's core value
 
-## Phase 6 — Supabase Persistence
+## Phase 6 — Supabase Persistence ✅
 - Supabase Postgres schema: `sessions` table (document name, timestamp, user note) + `citation_results` table (verdict, justification, linked to session)
 - `POST /sessions` saves a completed audit to the database
 - "Save report" button in the dashboard triggers the save
