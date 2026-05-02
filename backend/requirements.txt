@@ -5,6 +5,7 @@ anthropic
 pymupdf
 python-docx
 python-dotenv
+psycopg2-binary
 httpx
 pytest
 ruff
