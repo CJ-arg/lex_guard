@@ -44,10 +44,13 @@ Phases are intentionally focused — each one is a shippable slice of work, inde
 - `GET /sessions/:id` retrieves a saved report — permalink URL for sharing within the firm
 
 ## Phase 7 — Real Investigator
-- Replace the stub with a real search implementation: scraper or structured query against SAIJ and InfoLeg public interfaces
-- Fuzzy matcher from Phase 4 activated: typos and transposed names surface as correction suggestions, not false `danger` verdicts
-- Attorney sees the corrected citation alongside the original when a near-match is found
-- Graceful degradation: if neither source responds, verdict is flagged as `unverifiable` (not `danger`)
+- Replace the stub with a real source-adapter layer querying three official repositories: **CSJN** (canonical lookup by `Fallos: TOMO:PÁGINA`), **SAIJ** (national + provincial jurisprudence), and **JUBA** (Buenos Aires jurisprudence)
+- Adapter contract internal-only (`SourceResult`); public Phase 4 contract `{found, ruling_text}` extended with **optional** fields `source`, `source_url`, `match_score`, `canonical_caratula` — backward compatible with Phase 5 Judge and Phase 4 UI badges
+- Investigator orchestrates: parallel fan-out via `asyncio.gather`, in-memory rate limiter per source, Supabase `citation_cache` for repeated lookups (30-day TTL)
+- Fuzzy matcher upgraded from pure-Python Levenshtein (Phase 4 reference impl) to `rapidfuzz` for production; typos and transposed carátulas surface as correction suggestions, not false `danger` verdicts
+- Attorney sees the corrected carátula and the canonical source URL alongside the original when a near-match is found
+- Graceful degradation: if all sources fail (network error, source down, captcha), verdict is flagged as `unverifiable` (not `danger`); HTTP 502 from a single adapter does not poison the verdict for the citation if other adapters succeed
+- Out of scope for Phase 7: PJN cámaras nacionales beyond what SAIJ already indexes, other provincial cortes, doctrine. These are Phase 9+ work
 
 ## Phase 8 — Hardening & Edge Cases
 - Large document support: chunk briefs over a configurable page threshold before passing to the Extractor
