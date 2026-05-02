@@ -8,7 +8,7 @@ LexGuard exists to eliminate that threat before a brief ever reaches the court.
 
 LexGuard is a pre-filing audit platform for law firms. It accepts a draft brief (PDF or DOCX), automatically isolates every jurisprudential citation, and runs each one through a two-stage verification pipeline:
 
-1. **Existence check** — confirms the ruling is registered in official repositories (CSJN, Federal Appellate Courts / Cámaras Federales, Provincial Supreme Courts, InfoLeg, SAIJ). Typos and transpositions are handled with fuzzy matching, so good-faith errors surface as corrections rather than false alarms.
+1. 1. **Existence check** — confirms the ruling is registered in the official Argentine jurisprudence repositories LexGuard treats as sources of truth: **SAIJ** (Sistema Argentino de Información Jurídica — Ministerio de Justicia, 900 000+ documents indexing CSJN, federal and provincial jurisprudence), **CSJN Secretaría de Jurisprudencia** (the canonical source for Supreme Court rulings, addressable directly by the citation format `Fallos: TOMO:PÁGINA`), and **JUBA** (Jurisprudencia de Buenos Aires, SCBA + Cámaras de Apelación bonaerenses). Typos and transpositions are handled with fuzzy matching, so good-faith errors surface as corrections rather than false alarms. When none of the sources can confirm or deny a citation (network failure, source down), the verdict degrades to `unverifiable` rather than `danger`.
 2. **Semantic integrity check** — compares what the attorney claims the ruling established against what the ruling actually resolved. A real case cited out of context is as dangerous as a fictitious one.
 
 Each citation returns a verdict on a three-level scale, each accompanied by a plain-language justification the attorney can act on immediately:
@@ -33,6 +33,20 @@ Results are delivered through a web dashboard. Sessions can be saved for audit t
 No brief leaves a firm with a citation that cannot withstand scrutiny. Every hallucination is caught internally, before opposing counsel or a judge finds it first.
 
 A clean LexGuard report is not a formality — it is the last line of defense between a well-constructed argument and a professional liability claim.
+
+## Sources of Truth
+
+LexGuard verifies citations exclusively against **official, public, free** Argentine repositories. The MVP integrates three:
+
+| Source | Operator | Coverage | Citation key |
+|---|---|---|---|
+| **SAIJ** (saij.gob.ar) | Ministerio de Justicia y Derechos Humanos | National + provincial jurisprudence; 900 000+ documents updated daily | Internal SAIJ ID (`SUA######`, `FA######`) |
+| **CSJN Secretaría de Jurisprudencia** (sjconsulta.csjn.gov.ar) | Corte Suprema de Justicia de la Nación | All Court rulings since 1863; full text since 1994 | `Fallos: TOMO:PÁGINA` |
+| **JUBA** (juba.scba.gov.ar) | Suprema Corte de Justicia de Buenos Aires | SCBA + provincial Cámaras de Apelación; sumarios since 1984, full text since 1986 | Carátula + nº de causa |
+
+Each verdict carries the source(s) that confirmed (or failed to confirm) the citation, plus a canonical URL the attorney can open to read the original ruling. This traceability is what makes LexGuard's report defensible inside the firm and, if necessary, before a judge.
+
+Sources outside this list (commercial platforms, blogs, AI-generated databases) are explicitly **not** used. Auditability requires that every verdict trace back to a public, official URL.
 
 ## A Tool, Not a Substitute
 
