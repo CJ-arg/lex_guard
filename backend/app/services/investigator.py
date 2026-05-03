@@ -119,9 +119,5 @@ async def _investigate_one(citation: dict) -> dict:
     return _build_result(citation, winner)
 
 
-async def _investigate_all(citations: list[dict]) -> list[dict]:
+async def investigate_citations(citations: list[dict]) -> list[dict]:
     return list(await asyncio.gather(*[_investigate_one(c) for c in citations]))
-
-
-def investigate_citations(citations: list[dict]) -> list[dict]:
-    return asyncio.run(_investigate_all(citations))
