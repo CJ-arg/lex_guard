@@ -59,21 +59,10 @@ def test_fetch_returns_empty_on_error():
     assert asyncio.run(run()) == []
 
 
-def test_fetch_parses_results():
+def test_fetch_returns_empty_while_webforms_disabled():
+    # JUBA fetch is disabled pending proper two-step WebForms POST implementation.
     async def run():
-        mock_resp = MagicMock()
-        mock_resp.text = _SAMPLE_HTML
-        mock_resp.raise_for_status = MagicMock()
-
-        mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.aclose = AsyncMock()
-
-        with patch("app.services.juba_adapter.juba_limiter") as mock_lim:
-            mock_lim.__aenter__ = AsyncMock(return_value=None)
-            mock_lim.__aexit__ = AsyncMock(return_value=False)
-            return await fetch({"case_name": "González María"}, client=mock_client)
+        return await fetch({"case_name": "González María"})
 
     results = asyncio.run(run())
-    assert len(results) > 0
-    assert results[0]["source"] == "JUBA"
+    assert results == []
