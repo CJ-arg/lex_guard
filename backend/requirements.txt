@@ -7,6 +7,8 @@ python-docx
 python-dotenv
 psycopg2-binary
 httpx
+selectolax
+rapidfuzz
 pytest
 ruff
-# supabase  — add in Phase 6 (requires C++ build tools on Windows for pyiceberg dep)
+# supabase  — requires C++ build tools on Windows for pyiceberg dep

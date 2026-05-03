@@ -2,7 +2,8 @@ from app.db import get_conn
 
 
 def save_session(document_name: str, user_note: str | None, citations: list[dict]) -> str:
-    with get_conn() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO sessions (document_name, user_note) VALUES (%s, %s) RETURNING id",
@@ -15,8 +16,9 @@ def save_session(document_name: str, user_note: str | None, citations: list[dict
                     """
                     INSERT INTO citation_results
                       (session_id, position, claim, case_name, court, year_tomo_folio,
-                       found, verdict, justification)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       found, verdict, justification,
+                       source, source_url, match_score, canonical_caratula, unverifiable)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         session_id,
@@ -28,14 +30,22 @@ def save_session(document_name: str, user_note: str | None, citations: list[dict
                         citation.get("found", False),
                         citation.get("verdict", "danger"),
                         citation.get("justification", ""),
+                        citation.get("source"),
+                        citation.get("source_url"),
+                        citation.get("match_score"),
+                        citation.get("canonical_caratula"),
+                        bool(citation.get("unverifiable", False)),
                     ),
                 )
         conn.commit()
+    finally:
+        conn.close()
     return session_id
 
 
 def get_session(session_id: str) -> dict:
-    with get_conn() as conn:
+    conn = get_conn()
+    try:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM sessions WHERE id = %s", (session_id,))
             session = cur.fetchone()
@@ -47,6 +57,8 @@ def get_session(session_id: str) -> dict:
                 (session_id,),
             )
             citations = cur.fetchall()
+    finally:
+        conn.close()
 
     return {
         "id": str(session["id"]),
@@ -62,6 +74,11 @@ def get_session(session_id: str) -> dict:
                 "found": r["found"],
                 "verdict": r["verdict"],
                 "justification": r["justification"],
+                "source": r.get("source"),
+                "source_url": r.get("source_url"),
+                "match_score": r.get("match_score"),
+                "canonical_caratula": r.get("canonical_caratula"),
+                "unverifiable": bool(r.get("unverifiable", False)),
             }
             for r in citations
         ],

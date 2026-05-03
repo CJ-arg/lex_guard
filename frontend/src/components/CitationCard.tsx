@@ -5,8 +5,13 @@ interface Citation {
   year_tomo_folio: string | null;
   found?: boolean;
   ruling_text?: string | null;
-  verdict?: "approved" | "warning" | "danger";
+  verdict?: "approved" | "warning" | "danger" | "unverifiable";
   justification?: string;
+  source?: "CSJN" | "SAIJ" | "JUBA";
+  source_url?: string | null;
+  match_score?: number | null;
+  canonical_caratula?: string | null;
+  unverifiable?: boolean;
 }
 
 interface Props {
@@ -18,15 +23,17 @@ const VERDICT_STYLES = {
   approved: "bg-green-900/40 text-green-400 border-green-800",
   warning: "bg-yellow-900/40 text-yellow-400 border-yellow-800",
   danger: "bg-red-900/40 text-red-400 border-red-800",
+  unverifiable: "bg-zinc-700/60 text-zinc-400 border-zinc-600",
 };
 
 const VERDICT_LABELS = {
   approved: "Aprobado ✓",
   warning: "Advertencia ⚠",
   danger: "Peligro ✗",
+  unverifiable: "No verificable",
 };
 
-function VerdictBadge({ verdict }: { verdict: "approved" | "warning" | "danger" }) {
+function VerdictBadge({ verdict }: { verdict: NonNullable<Citation["verdict"]> }) {
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${VERDICT_STYLES[verdict]}`}>
       {VERDICT_LABELS[verdict]}
@@ -46,16 +53,31 @@ function FoundBadge({ found }: { found: boolean }) {
   );
 }
 
+function SourceBadge({ source }: { source: "CSJN" | "SAIJ" | "JUBA" }) {
+  return (
+    <span className="text-xs font-mono px-2 py-0.5 rounded bg-zinc-700 text-zinc-300">
+      {source}
+    </span>
+  );
+}
+
 export default function CitationCard({ citation, index }: Props) {
+  const showCorrection =
+    citation.canonical_caratula &&
+    citation.canonical_caratula.toLowerCase().trim() !== citation.case_name.toLowerCase().trim();
+
   return (
     <div className="border border-zinc-700 rounded-xl p-5 flex flex-col gap-3 bg-zinc-900">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-xs font-mono text-zinc-500">#{index + 1}</span>
-        {citation.verdict !== undefined ? (
-          <VerdictBadge verdict={citation.verdict} />
-        ) : citation.found !== undefined ? (
-          <FoundBadge found={citation.found} />
-        ) : null}
+        <div className="flex items-center gap-2 flex-wrap">
+          {citation.source && <SourceBadge source={citation.source} />}
+          {citation.verdict !== undefined ? (
+            <VerdictBadge verdict={citation.verdict} />
+          ) : citation.found !== undefined ? (
+            <FoundBadge found={citation.found} />
+          ) : null}
+        </div>
       </div>
 
       <p className="text-zinc-100 text-sm leading-relaxed">
@@ -67,6 +89,13 @@ export default function CitationCard({ citation, index }: Props) {
         <span className="text-zinc-500 text-xs uppercase tracking-wide block mb-1">Carátula</span>
         {citation.case_name}
       </p>
+
+      {showCorrection && (
+        <div className="border border-yellow-800 bg-yellow-900/20 rounded-lg px-3 py-2 text-xs text-yellow-300">
+          <span className="font-semibold block mb-0.5">Carátula canónica sugerida</span>
+          {citation.canonical_caratula}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-4">
         {citation.court && (
@@ -82,6 +111,17 @@ export default function CitationCard({ citation, index }: Props) {
           </p>
         )}
       </div>
+
+      {citation.source_url && (
+        <a
+          href={citation.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-400 hover:text-blue-300 underline break-all"
+        >
+          Ver fallo original →
+        </a>
+      )}
 
       {citation.justification && (
         <div className="border-t border-zinc-700 pt-3">
