@@ -18,6 +18,7 @@ from app.services import csjn_adapter, juba_adapter, saij_adapter
 from app.services.citation_cache import get_cached, set_cached
 
 DIRECT_THRESHOLD = 0.85
+MIN_SCORE = 0.50  # below this, treat any candidate as a non-match
 
 _client: anthropic.Anthropic | None = None
 
@@ -100,6 +101,9 @@ async def _investigate_one(citation: dict) -> dict:
 
     candidates.sort(key=lambda c: c["match_score"], reverse=True)
     best = candidates[0]
+
+    if best["match_score"] < MIN_SCORE:
+        return {**citation, "found": False, "unverifiable": True}
 
     if len(candidates) == 1 or best["match_score"] >= DIRECT_THRESHOLD:
         winner = best
