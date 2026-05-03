@@ -79,7 +79,7 @@ async def extract(req: ExtractRequest):
 @app.post("/investigate")
 async def investigate(req: InvestigateRequest):
     try:
-        results = investigate_citations(req.citations)
+        results = await investigate_citations(req.citations)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
 
