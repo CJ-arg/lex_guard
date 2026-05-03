@@ -12,6 +12,11 @@ def _get_client() -> anthropic.Anthropic:
         _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     return _client
 
+_AUTO_WARNING_NO_TEXT = (
+    "El fallo fue localizado en las fuentes oficiales pero no se pudo recuperar el texto completo. "
+    "Se recomienda verificar el contenido directamente en la fuente antes de presentar el escrito."
+)
+
 _AUTO_DANGER_JUSTIFICATION = (
     "El fallo no fue encontrado en las fuentes verificadas. "
     "No es posible confirmar su existencia ni la interpretación invocada."
@@ -64,6 +69,9 @@ def _call_judge(claim: str, ruling_text: str) -> dict:
             raw = raw[4:]
         raw = raw.strip()
 
+    if not raw:
+        raise ValueError("Respuesta vacía del modelo")
+
     result = json.loads(raw)
 
     if result.get("verdict") not in ("approved", "warning", "danger"):
@@ -87,6 +95,14 @@ def judge_citations(citations: list[dict]) -> list[dict]:
                 **citation,
                 "verdict": "danger",
                 "justification": _AUTO_DANGER_JUSTIFICATION,
+            })
+            continue
+
+        if not citation.get("ruling_text"):
+            results.append({
+                **citation,
+                "verdict": "warning",
+                "justification": _AUTO_WARNING_NO_TEXT,
             })
             continue
 
