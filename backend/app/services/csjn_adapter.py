@@ -54,7 +54,7 @@ def _parse_result_html(html: str, case_name: str) -> list[SourceResult]:
         source_url = None
         if link_node:
             href = link_node.attributes.get("href", "")
-            if href and not href.startswith("javascript:"):
+            if href:
                 source_url = href if href.startswith("http") else f"https://sjconsulta.csjn.gov.ar{href}"
 
         # Grab first paragraph as ruling excerpt
