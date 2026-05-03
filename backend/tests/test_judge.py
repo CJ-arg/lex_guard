@@ -71,3 +71,25 @@ def test_mixed_citations():
 
     assert results[0]["verdict"] == "danger"
     assert results[1]["verdict"] == "approved"
+
+
+UNVERIFIABLE_CITATION = {
+    **NOT_FOUND_CITATION,
+    "unverifiable": True,
+}
+
+
+def test_unverifiable_sets_verdict():
+    results = judge_citations([UNVERIFIABLE_CITATION])
+    assert results[0]["verdict"] == "unverifiable"
+
+
+def test_unverifiable_skips_api_call():
+    with patch("app.services.agent_judge._get_client") as mock_get:
+        judge_citations([UNVERIFIABLE_CITATION])
+        mock_get.assert_not_called()
+
+
+def test_unverifiable_has_justification():
+    results = judge_citations([UNVERIFIABLE_CITATION])
+    assert len(results[0]["justification"]) > 10

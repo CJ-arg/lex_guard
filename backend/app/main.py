@@ -6,7 +6,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 from app.services.agent_extractor import extract_citations
-from app.services.agent_investigator_stub import investigate_citations
+from app.services.investigator import investigate_citations
 from app.services.agent_judge import judge_citations
 from app.services.extractor import extract_docx, extract_pdf
 from app.services.sessions import get_session, save_session

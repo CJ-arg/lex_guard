@@ -17,6 +17,11 @@ _AUTO_DANGER_JUSTIFICATION = (
     "No es posible confirmar su existencia ni la interpretación invocada."
 )
 
+_AUTO_UNVERIFIABLE_JUSTIFICATION = (
+    "No fue posible consultar ninguna de las fuentes oficiales (CSJN, SAIJ, JUBA). "
+    "El error puede ser transitorio; se recomienda verificar manualmente antes de presentar el escrito."
+)
+
 _SYSTEM = """Eres un juez experto en derecho argentino.
 Tu tarea es evaluar si la afirmación que hace un abogado sobre un fallo judicial es correcta.
 
@@ -70,6 +75,13 @@ def _call_judge(claim: str, ruling_text: str) -> dict:
 def judge_citations(citations: list[dict]) -> list[dict]:
     results = []
     for citation in citations:
+        if citation.get("unverifiable"):
+            results.append({
+                **citation,
+                "verdict": "unverifiable",
+                "justification": _AUTO_UNVERIFIABLE_JUSTIFICATION,
+            })
+            continue
         if not citation.get("found"):
             results.append({
                 **citation,
