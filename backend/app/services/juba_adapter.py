@@ -49,7 +49,7 @@ def _parse_results_html(html: str, case_name: str) -> list[SourceResult]:
         source_url = None
         if link_node:
             href = link_node.attributes.get("href", "")
-            if href:
+            if href and not href.startswith("javascript:"):
                 source_url = href if href.startswith("http") else f"{_BASE}/{href.lstrip('/')}"
 
         ruling_text = cells[-1].text(strip=True) if len(cells) > 1 else caratula
