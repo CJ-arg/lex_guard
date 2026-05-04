@@ -60,43 +60,6 @@ describe("CitationCard — source badge", () => {
   });
 });
 
-describe("CitationCard — canonical caratula correction", () => {
-  it("shows correction suggestion when canonical differs from case_name", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          case_name: "Siri Angel",
-          canonical_caratula: "Siri, Ángel s/ interpone recurso de hábeas corpus",
-          verdict: "approved",
-        }}
-        index={0}
-      />
-    );
-    expect(screen.getByText("Carátula canónica sugerida")).toBeDefined();
-    expect(screen.getByText("Siri, Ángel s/ interpone recurso de hábeas corpus")).toBeDefined();
-  });
-
-  it("hides correction when canonical matches case_name", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          canonical_caratula: "Siri Angel",
-          verdict: "approved",
-        }}
-        index={0}
-      />
-    );
-    expect(screen.queryByText("Carátula canónica sugerida")).toBeNull();
-  });
-
-  it("hides correction when canonical_caratula is absent", () => {
-    render(<CitationCard citation={{ ...BASE, verdict: "approved" }} index={0} />);
-    expect(screen.queryByText("Carátula canónica sugerida")).toBeNull();
-  });
-});
-
 describe("CitationCard — source URL link", () => {
   it("renders link when source_url is present", () => {
     render(

@@ -62,10 +62,6 @@ function SourceBadge({ source }: { source: "CSJN" | "SAIJ" | "JUBA" }) {
 }
 
 export default function CitationCard({ citation, index }: Props) {
-  const showCorrection =
-    citation.canonical_caratula &&
-    citation.canonical_caratula.toLowerCase().trim() !== citation.case_name.toLowerCase().trim();
-
   return (
     <div className="border border-zinc-700 rounded-xl p-5 flex flex-col gap-3 bg-zinc-900">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -89,13 +85,6 @@ export default function CitationCard({ citation, index }: Props) {
         <span className="text-zinc-500 text-xs uppercase tracking-wide block mb-1">Carátula</span>
         {citation.case_name}
       </p>
-
-      {showCorrection && (
-        <div className="border border-yellow-800 bg-yellow-900/20 rounded-lg px-3 py-2 text-xs text-yellow-300">
-          <span className="font-semibold block mb-0.5">Carátula canónica sugerida</span>
-          {citation.canonical_caratula}
-        </div>
-      )}
 
       <div className="flex flex-wrap gap-4">
         {citation.court && (

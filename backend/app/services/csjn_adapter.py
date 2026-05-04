@@ -51,7 +51,7 @@ def _parse_json_results(records: list[dict], case_name: str) -> list[SourceResul
         tomo = rec.get("tomo") or ""
         pagina = rec.get("pagina") or ""
         source_url = f"{_FALLO_URL}?id={tomo}-{pagina}" if tomo and pagina else None
-        score = fuzz.token_sort_ratio(case_name.lower(), caratula.lower()) / 100.0
+        score = fuzz.WRatio(case_name.lower(), caratula.lower()) / 100.0
         results.append(
             SourceResult(
                 found=True,

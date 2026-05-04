@@ -74,7 +74,7 @@ def test_parse_api_response_ranks_siri_first():
 
 def test_parse_api_response_builds_source_url():
     results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
-    assert results[0]["source_url"].startswith("https://saij.gob.ar/")
+    assert results[0]["source_url"].startswith("https://saij.gob.ar/buscador/")
 
 
 def test_parse_api_response_empty_returns_empty():

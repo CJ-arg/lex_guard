@@ -1,57 +1,26 @@
 """Real Investigator: fans out to CSJN, SAIJ, and JUBA in parallel.
 
-Disambiguation flow:
-  - 0 candidates  → unverifiable
-  - 1 candidate, score >= DIRECT_THRESHOLD  → direct return
-  - multiple candidates  → Haiku LLM picks the best match
+Selection rules (WRatio scoring):
+  - score < MIN_SCORE  → unverifiable (not confident enough to call it found)
+  - score >= MIN_SCORE → found; prefer CSJN (has ruling text) over SAIJ
   - winner written to citation_cache
 """
 
 import asyncio
-import json
-import os
 from typing import Any
-
-import anthropic
 
 from app.services import csjn_adapter, juba_adapter, saij_adapter
 from app.services.citation_cache import get_cached, set_cached
 
-DIRECT_THRESHOLD = 0.85
-MIN_SCORE = 0.50  # below this, treat any candidate as a non-match
-
-_client: anthropic.Anthropic | None = None
+MIN_SCORE = 0.80  # WRatio; below this we are not confident it's the same case
 
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
-
-
-def _disambiguate(case_name: str, candidates: list[dict]) -> dict:
-    numbered = "\n".join(
-        f"{i + 1}. [{c['source']}] {c['canonical_caratula']} (score={c['match_score']:.2f})"
-        for i, c in enumerate(candidates)
+def _best_candidate(candidates: list[dict]) -> dict:
+    """Prefer candidates with ruling text, then by score."""
+    return max(
+        candidates,
+        key=lambda c: (bool(c.get("ruling_text")), c["match_score"]),
     )
-    prompt = (
-        f"Carátula buscada: {case_name}\n\n"
-        f"Candidatos encontrados:\n{numbered}\n\n"
-        "Responde ÚNICAMENTE con un JSON: {\"index\": <número del mejor candidato, base 1>}"
-    )
-    msg = _get_client().messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=64,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = msg.content[0].text.strip()
-    try:
-        data = json.loads(raw)
-        idx = int(data["index"]) - 1
-        return candidates[max(0, min(idx, len(candidates) - 1))]
-    except Exception:
-        return candidates[0]
 
 
 def _build_result(citation: dict, winner: dict) -> dict:
@@ -91,24 +60,18 @@ async def _investigate_one(citation: dict) -> dict:
         return_exceptions=True,
     )
 
-    candidates: list[dict[str, Any]] = []
-    for r in raw_results:
-        if isinstance(r, list):
-            candidates.extend(r)
+    candidates: list[dict[str, Any]] = [
+        c
+        for r in raw_results
+        if isinstance(r, list)
+        for c in r
+        if c.get("match_score", 0.0) >= MIN_SCORE
+    ]
 
     if not candidates:
         return {**citation, "found": False, "unverifiable": True}
 
-    candidates.sort(key=lambda c: c["match_score"], reverse=True)
-    best = candidates[0]
-
-    if best["match_score"] < MIN_SCORE:
-        return {**citation, "found": False, "unverifiable": True}
-
-    if len(candidates) == 1 or best["match_score"] >= DIRECT_THRESHOLD:
-        winner = best
-    else:
-        winner = _disambiguate(case_name, candidates[:5])
+    winner = _best_candidate(candidates)
 
     set_cached(
         case_name,

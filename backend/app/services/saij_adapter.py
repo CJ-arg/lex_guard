@@ -3,11 +3,14 @@
 Uses the /busqueda JSON API (discovered from query-object.js).
 Response: searchResults.documentResultList[].documentAbstract (JSON)
   -> document.content.{actor, sobre, tribunal, fecha}
-  -> document.metadata.friendly-url.{subdomain, description}
+
+SAIJ confirms case existence only — direct document URLs return 500.
+source_url points to the SAIJ search page for the carátula.
 """
 
 import json
 import re
+import urllib.parse
 from typing import TypedDict
 
 import httpx
@@ -60,10 +63,7 @@ def _parse_api_response(data: dict, case_name: str) -> list[SourceResult]:
 
         caratula = f"{actor} {sobre}".strip() if sobre else actor
 
-        friendly = meta.get("friendly-url") or {}
-        subdomain = friendly.get("subdomain", "")
-        description = friendly.get("description", "")
-        source_url = f"{_BASE}/{subdomain}/{description}" if subdomain and description else None
+        source_url = f"{_BASE}/buscador/jurisprudencia-nacional?busqueda={urllib.parse.quote(caratula)}"
 
         tribunal = (content.get("tribunal") or "").strip()
         fecha = (content.get("fecha") or "").strip()
@@ -72,7 +72,7 @@ def _parse_api_response(data: dict, case_name: str) -> list[SourceResult]:
         else:
             ruling_text = sobre or None
 
-        score = fuzz.token_sort_ratio(case_name.lower(), caratula.lower()) / 100.0
+        score = fuzz.WRatio(case_name.lower(), caratula.lower()) / 100.0
         results.append(
             SourceResult(
                 found=True,
