@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.csjn_adapter import _parse_result_html, _parse_tomo_pagina, fetch
+from app.services.csjn_adapter import _parse_json_results, _parse_tomo_pagina, fetch
 
 
 def test_parse_tomo_pagina_fallos_format():
@@ -19,40 +19,47 @@ def test_parse_tomo_pagina_returns_none_on_no_match():
     assert _parse_tomo_pagina("") is None
 
 
-_SAMPLE_HTML = """
-<html><body>
-<table class="tablaCuerpo">
-  <tr>
-    <td><a href="/fallos/ver?id=1">Siri, Ángel s/ interpone recurso de hábeas corpus</a></td>
-    <td>Las garantías constitucionales son operativas y de aplicación directa.</td>
-  </tr>
-  <tr>
-    <td><a href="/fallos/ver?id=2">Kot S.R.L. c/ Estado Nacional</a></td>
-    <td>La garantía constitucional del artículo 18 se extiende al domicilio comercial.</td>
-  </tr>
-</table>
-</body></html>
-"""
+_SAMPLE_RECORDS = [
+    {
+        "autos": "Siri, Ángel s/ interpone recurso de hábeas corpus",
+        "texto": "Las garantías constitucionales son operativas y de aplicación directa.",
+        "tomo": "239",
+        "pagina": "459",
+    },
+    {
+        "autos": "Kot S.R.L. c/ Estado Nacional",
+        "texto": "La garantía constitucional del artículo 18 se extiende al domicilio comercial.",
+        "tomo": "241",
+        "pagina": "291",
+    },
+]
 
 
-def test_parse_result_html_extracts_rows():
-    results = _parse_result_html(_SAMPLE_HTML, "Siri Angel")
+def test_parse_json_results_extracts_records():
+    results = _parse_json_results(_SAMPLE_RECORDS, "Siri Angel")
     assert len(results) == 2
 
 
-def test_parse_result_html_scores_best_match_first():
-    results = _parse_result_html(_SAMPLE_HTML, "Siri Angel")
-    # Siri should score higher than Kot against "Siri Angel"
+def test_parse_json_results_scores_best_match_first():
+    results = _parse_json_results(_SAMPLE_RECORDS, "Siri Angel")
     assert results[0]["canonical_caratula"].startswith("Siri")
 
 
-def test_parse_result_html_builds_absolute_url():
-    results = _parse_result_html(_SAMPLE_HTML, "Siri Angel")
-    assert results[0]["source_url"].startswith("https://")
+def test_parse_json_results_builds_source_url():
+    results = _parse_json_results(_SAMPLE_RECORDS, "Siri Angel")
+    for r in results:
+        assert r["source_url"] is not None
+        assert r["source_url"].startswith("https://")
+        assert "verFallo" in r["source_url"]
 
 
-def test_parse_result_html_empty_html_returns_empty():
-    assert _parse_result_html("<html><body></body></html>", "test") == []
+def test_parse_json_results_empty_returns_empty():
+    assert _parse_json_results([], "test") == []
+
+
+def test_parse_json_results_skips_record_without_autos():
+    records = [{"texto": "some text", "tomo": "1", "pagina": "1"}]
+    assert _parse_json_results(records, "test") == []
 
 
 def test_fetch_returns_empty_on_http_error():
@@ -65,18 +72,22 @@ def test_fetch_returns_empty_on_http_error():
             mock_lim.__aexit__ = AsyncMock(return_value=False)
             return await fetch({"case_name": "Siri Angel"}, client=mock_client)
 
-    result = asyncio.run(run())
-    assert result == []
+    assert asyncio.run(run()) == []
 
 
 def test_fetch_returns_parsed_results():
     async def run():
-        mock_resp = MagicMock()
-        mock_resp.text = _SAMPLE_HTML
-        mock_resp.raise_for_status = MagicMock()
+        mock_json_resp = MagicMock()
+        mock_json_resp.json.return_value = _SAMPLE_RECORDS
+        mock_json_resp.raise_for_status = MagicMock()
+
+        mock_get_session = MagicMock()
+        mock_post_resp = MagicMock()
 
         mock_client = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_resp)
+        # get called twice: session GET, then paginarSumarios GET
+        mock_client.get = AsyncMock(side_effect=[mock_get_session, mock_json_resp])
+        mock_client.post = AsyncMock(return_value=mock_post_resp)
         mock_client.aclose = AsyncMock()
 
         with patch("app.services.csjn_adapter.csjn_limiter") as mock_lim:
