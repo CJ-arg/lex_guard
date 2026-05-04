@@ -60,25 +60,3 @@ describe("CitationCard — source badge", () => {
   });
 });
 
-describe("CitationCard — source URL link", () => {
-  it("renders link when source_url is present", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          verdict: "approved",
-          source_url: "https://sjconsulta.csjn.gov.ar/fallos/1",
-        }}
-        index={0}
-      />
-    );
-    const link = screen.getByRole("link", { name: /ver fallo original/i });
-    expect(link).toBeDefined();
-    expect(link.getAttribute("href")).toBe("https://sjconsulta.csjn.gov.ar/fallos/1");
-  });
-
-  it("does not render link when source_url is absent", () => {
-    render(<CitationCard citation={{ ...BASE, verdict: "approved" }} index={0} />);
-    expect(screen.queryByRole("link")).toBeNull();
-  });
-});

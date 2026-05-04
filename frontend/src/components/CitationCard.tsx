@@ -101,17 +101,6 @@ export default function CitationCard({ citation, index }: Props) {
         )}
       </div>
 
-      {citation.source_url && (
-        <a
-          href={citation.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-blue-400 hover:text-blue-300 underline break-all"
-        >
-          Ver fallo original →
-        </a>
-      )}
-
       {citation.justification && (
         <div className="border-t border-zinc-700 pt-3">
           <p className="text-zinc-500 text-xs uppercase tracking-wide mb-1">Justificación</p>
