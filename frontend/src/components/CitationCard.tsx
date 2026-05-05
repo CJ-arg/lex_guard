@@ -1,3 +1,11 @@
+interface SourceRouting {
+  primary_attempted: string;
+  primary_result: "found" | "not_found" | "error" | null;
+  secondary_attempted: string | null;
+  secondary_result: "found" | "not_found" | "error" | null;
+  fallback_used: boolean;
+}
+
 interface Citation {
   claim: string;
   case_name: string;
@@ -12,6 +20,7 @@ interface Citation {
   match_score?: number | null;
   canonical_caratula?: string | null;
   unverifiable?: boolean;
+  source_routing?: SourceRouting | null;
 }
 
 interface Props {
@@ -61,6 +70,14 @@ function SourceBadge({ source }: { source: "CSJN" | "SAIJ" | "JUBA" }) {
   );
 }
 
+function routingLabel(sr: SourceRouting): string {
+  if (sr.fallback_used) return "Búsqueda en todas las fuentes";
+  if (sr.primary_result === "found") return `Verificado vía ${sr.primary_attempted} (primaria)`;
+  if (sr.secondary_attempted && sr.secondary_result === "found")
+    return `${sr.primary_attempted} sin resultado → confirmado por ${sr.secondary_attempted}`;
+  return `Verificado vía ${sr.primary_attempted}`;
+}
+
 export default function CitationCard({ citation, index }: Props) {
   return (
     <div className="border border-zinc-700 rounded-xl p-5 flex flex-col gap-3 bg-zinc-900">
@@ -100,6 +117,12 @@ export default function CitationCard({ citation, index }: Props) {
           </p>
         )}
       </div>
+
+      {citation.source_routing && (
+        <p className="text-zinc-500 text-xs italic">
+          {routingLabel(citation.source_routing)}
+        </p>
+      )}
 
       {citation.justification && (
         <div className="border-t border-zinc-700 pt-3">

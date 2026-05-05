@@ -12,13 +12,16 @@ def save_session(document_name: str, user_note: str | None, citations: list[dict
             session_id = str(cur.fetchone()["id"])
 
             for position, citation in enumerate(citations):
+                import json as _json
+                sr = citation.get("source_routing")
                 cur.execute(
                     """
                     INSERT INTO citation_results
                       (session_id, position, claim, case_name, court, year_tomo_folio,
                        found, verdict, justification,
-                       source, source_url, match_score, canonical_caratula, unverifiable)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       source, source_url, match_score, canonical_caratula, unverifiable,
+                       source_routing)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         session_id,
@@ -35,6 +38,7 @@ def save_session(document_name: str, user_note: str | None, citations: list[dict
                         citation.get("match_score"),
                         citation.get("canonical_caratula"),
                         bool(citation.get("unverifiable", False)),
+                        _json.dumps(sr) if sr else None,
                     ),
                 )
         conn.commit()
@@ -79,6 +83,7 @@ def get_session(session_id: str) -> dict:
                 "match_score": r.get("match_score"),
                 "canonical_caratula": r.get("canonical_caratula"),
                 "unverifiable": bool(r.get("unverifiable", False)),
+                "source_routing": r.get("source_routing"),
             }
             for r in citations
         ],
