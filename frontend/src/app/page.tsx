@@ -32,16 +32,18 @@ function Spinner({ label }: { label: string }) {
   );
 }
 
+const BTN_LINK = "text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded";
+
 function ErrorActions({ message, onRetry, onReset }: { message: string; onRetry: () => void; onReset: () => void }) {
   return (
-    <div className="flex flex-col items-center gap-4">
-      <p className="text-red-400 text-sm text-center max-w-sm">{message}</p>
-      <div className="flex gap-3">
-        <button onClick={onRetry} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
+    <div className="flex flex-col items-center gap-4 px-4">
+      <p role="alert" className="text-red-400 text-sm text-center max-w-sm">{message}</p>
+      <div className="flex gap-3 flex-wrap justify-center">
+        <button onClick={onRetry} className={`${BTN_LINK} text-blue-400 hover:text-blue-300`}>
           Reintentar
         </button>
-        <span className="text-zinc-600">·</span>
-        <button onClick={onReset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
+        <span className="text-zinc-600" aria-hidden="true">·</span>
+        <button onClick={onReset} className={`${BTN_LINK} text-zinc-400 hover:text-zinc-300`}>
           Subir otro documento
         </button>
       </div>
@@ -152,7 +154,7 @@ export default function Home() {
 
       {state.phase === "upload_error" && (
         <>
-          <p className="text-red-400 text-sm text-center max-w-sm">{state.message}</p>
+          <p role="alert" className="text-red-400 text-sm text-center max-w-sm px-4">{state.message}</p>
           <UploadZone onFile={handleFile} />
         </>
       )}

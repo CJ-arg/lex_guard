@@ -19,6 +19,11 @@ type SaveState =
   | { phase: "saved"; session_id: string }
   | { phase: "error"; message: string };
 
+const BTN_LINK = "text-sm text-blue-400 hover:text-blue-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded";
+const BTN_PRIMARY = "text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-4 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400";
+const BTN_GHOST = "text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500 rounded";
+const BTN_SAVE = "self-start text-sm text-zinc-400 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 rounded-lg px-4 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400";
+
 export default function CitationList({ filename, citations, onReset, readOnly, sessionMeta }: Props) {
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const [note, setNote] = useState("");
@@ -48,11 +53,11 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
 
   return (
     <div className="flex flex-col gap-4 w-full max-w-2xl">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <span className="text-zinc-400 text-sm font-mono truncate block">{filename}</span>
           {sessionMeta?.created_at && (
-            <span className="text-zinc-600 text-xs">{new Date(sessionMeta.created_at).toLocaleString()}</span>
+            <span className="text-zinc-600 text-xs">{new Date(sessionMeta.created_at).toLocaleString("es-AR")}</span>
           )}
           {sessionMeta?.user_note && (
             <span className="text-zinc-500 text-xs block">{sessionMeta.user_note}</span>
@@ -62,8 +67,8 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
           </span>
         </div>
         {!readOnly && (
-          <button onClick={onReset} className="text-sm text-blue-400 hover:text-blue-300 transition-colors shrink-0 ml-4">
-            Upload another document
+          <button onClick={onReset} className={`${BTN_LINK} shrink-0`}>
+            Subir otro documento
           </button>
         )}
       </div>
@@ -77,10 +82,7 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
       {!readOnly && (
         <div className="border-t border-zinc-800 pt-4 flex flex-col gap-3">
           {save.phase === "idle" && (
-            <button
-              onClick={() => setSave({ phase: "noting" })}
-              className="self-start text-sm text-zinc-400 hover:text-zinc-200 border border-zinc-700 hover:border-zinc-500 rounded-lg px-4 py-2 transition-colors"
-            >
+            <button onClick={() => setSave({ phase: "noting" })} className={BTN_SAVE}>
               Guardar informe
             </button>
           )}
@@ -92,13 +94,14 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
                 placeholder="Nota opcional (ej. Demanda Empresa Logística)"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                onKeyDown={(e) => { if (e.key === "Enter") handleSave(); }}
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500 focus-visible:ring-2 focus-visible:ring-blue-500"
               />
               <div className="flex gap-2">
-                <button onClick={handleSave} className="text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-4 py-2 transition-colors">
+                <button onClick={handleSave} className={BTN_PRIMARY}>
                   Confirmar
                 </button>
-                <button onClick={() => setSave({ phase: "idle" })} className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors">
+                <button onClick={() => setSave({ phase: "idle" })} className={BTN_GHOST}>
                   Cancelar
                 </button>
               </div>
@@ -112,13 +115,13 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
           {save.phase === "saved" && permalink && (
             <div className="flex flex-col gap-1">
               <p className="text-green-400 text-sm">Informe guardado.</p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <code className="text-zinc-400 text-xs bg-zinc-900 border border-zinc-700 rounded px-2 py-1 truncate max-w-xs">
                   {permalink}
                 </code>
                 <button
                   onClick={() => navigator.clipboard.writeText(permalink)}
-                  className="text-xs text-blue-400 hover:text-blue-300 shrink-0"
+                  className={`${BTN_LINK} text-xs shrink-0`}
                 >
                   Copiar
                 </button>
@@ -127,9 +130,9 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
           )}
 
           {save.phase === "error" && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <p className="text-red-400 text-sm">{save.message}</p>
-              <button onClick={handleSave} className="text-sm text-blue-400 hover:text-blue-300">
+              <button onClick={handleSave} className={BTN_LINK}>
                 Reintentar
               </button>
             </div>

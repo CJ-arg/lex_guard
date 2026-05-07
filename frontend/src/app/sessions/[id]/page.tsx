@@ -39,7 +39,15 @@ export default function SessionPage() {
       )}
 
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <div className="flex flex-col items-center gap-3">
+          <p role="alert" className="text-red-400 text-sm text-center">{error}</p>
+          <a
+            href="/"
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            Verificar un nuevo documento
+          </a>
+        </div>
       )}
 
       {session && (
