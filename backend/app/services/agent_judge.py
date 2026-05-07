@@ -112,7 +112,11 @@ def judge_citations(citations: list[dict]) -> list[dict]:
                 ruling_text=citation.get("ruling_text", ""),
             )
             results.append({**citation, **judgement})
-        except Exception as exc:
-            raise ValueError(f"Error al evaluar '{citation.get('case_name')}': {exc}") from exc
+        except Exception:
+            results.append({
+                **citation,
+                "verdict": "warning",
+                "justification": _AUTO_WARNING_NO_TEXT,
+            })
 
     return results

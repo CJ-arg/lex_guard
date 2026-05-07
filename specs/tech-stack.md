@@ -39,7 +39,7 @@ The three internal agents have different complexity profiles; model selection re
 
 ## Source Adapters (Phase 7+)
 
-The real Investigator agent does not call external sources directly. It dispatches to a **source adapter layer**, one adapter per official repository. Each adapter exposes the same internal contract so the Investigator can fan out queries in parallel and consolidate results without per-source branching logic.
+The real Investigator agent does not call external sources directly. It dispatches via a **deterministic Router** to a **source adapter layer**, with one adapter per official repository. Each adapter exposes the same internal contract so the Investigator can consolidate results without per-source branching logic.
 
 | Adapter | Source | Strategy |
 |---|---|---|
@@ -47,7 +47,30 @@ The real Investigator agent does not call external sources directly. It dispatch
 | `saij_adapter.py` | SAIJ | Search by carátula + tribunal + año on `/buscador/jurisprudencia-nacional`; HTML scrape of result list and detail page |
 | `juba_adapter.py` | JUBA | Search by carátula + nº de causa on `/busquedas.aspx`; HTML scrape of summary table |
 
-**Adapter contract (internal — does not affect the public Phase 4 schema):**
+### Routing layer (deterministic)
+
+Before any adapter is called, the Router (`backend/app/services/router.py`) decides which source(s) the citation should be checked against, based on the `court` field extracted by the Extractor and on the structural shape of `year_tomo_folio`.
+
+- The Router is pure regex + lookup tables; no LLM, no I/O. Fast (microseconds per citation), free, fully testable.
+- Its output is an ordered list `[primary, secondary?]` of source keys.
+- The Investigator then dispatches in order: it calls the **primary**; if `found: false`, it tries the **secondary** (cross-validator); if both fail it stops — a `not found` from the natural source is already strongly informative.
+- If the `court` field is missing or unrecognizable, the Router returns the full list `[CSJN, SAIJ, JUBA]` (fan-out preserved as fallback).
+
+#### Routing rules (initial)
+
+| Signal in citation | Primary | Secondary |
+|---|---|---|
+| `Fallos: T:P` format detected in `year_tomo_folio` | CSJN | SAIJ |
+| `court` matches CSJN patterns (`CSJN`, `Corte Suprema`, `C.S.J.N.`) | CSJN | SAIJ |
+| `court` matches SCBA patterns (`SCBA`, `Suprema Corte de Buenos Aires`) | JUBA | SAIJ |
+| `court` matches federal / national chamber patterns (`CNCiv`, `CNCom`, `CNFed`, `CNTrab`, `CNCAF`, `CNCrim`) | SAIJ | — |
+| `court` matches Buenos Aires provincial chamber patterns (`Cám. Apel.` + bonaerense locality) | JUBA | SAIJ |
+| `court` matches other provincial supreme courts | SAIJ | — |
+| `court` empty / ambiguous | (fan-out: CSJN + SAIJ + JUBA) | — |
+
+The rule table lives as a list of `(regex, primary, secondary)` tuples — extending it later (e.g., to add JUSCABA when its adapter ships) is a one-line change.
+
+### Adapter contract (internal — does not affect the public Phase 4 schema)
 
 ```python
 class SourceResult(TypedDict):
@@ -59,13 +82,24 @@ class SourceResult(TypedDict):
     match_score: float           # 0.0–1.0 (1.0 = exact, lower = fuzzy)
 ```
 
-The Investigator merges `SourceResult`s from all adapters into the **public** Phase 4 contract `{found, ruling_text}`. New fields (`source`, `source_url`, `match_score`, `canonical_caratula`) are added as **optional** properties on the returned citation — the Judge agent and the frontend Phase 4 badges keep working unchanged because they only read fields they know about.
+The Investigator merges `SourceResult`s into the **public** Phase 4 contract `{found, ruling_text}`. New fields (`source`, `source_url`, `match_score`, `canonical_caratula`, `source_routing`) are added as **optional** properties on the returned citation — the Judge agent and the frontend Phase 4 badges keep working unchanged because they only read fields they know about.
+
+The `source_routing` field captures what the Router decided and what actually happened, for transparent reporting in the UI:
+
+```python
+class SourceRouting(TypedDict):
+    primary_attempted: str            # e.g. "CSJN"
+    primary_result: Literal["found", "not_found", "error"]
+    secondary_attempted: str | None   # e.g. "SAIJ" or None
+    secondary_result: Literal["found", "not_found", "error"] | None
+    fallback_used: bool               # True when fan-out kicked in
+```
 
 ### Adapter dependencies
 
 | Library | Purpose | Why |
 |---|---|---|
-| `httpx` | Async HTTP client for adapter requests | Already a FastAPI ecosystem default; works with `asyncio.gather` to fan out source queries in parallel |
+| `httpx` | Async HTTP client for adapter requests | Already a FastAPI ecosystem default; works with `asyncio.gather` to fan out source queries when needed |
 | `selectolax` | Fast HTML parser | C-based, ~5× faster than BeautifulSoup; small footprint stays within Render free-tier memory |
 | `rapidfuzz` | Fuzzy string matching | C-extension implementation of Levenshtein + token sort ratio; replaces the pure-Python `fuzzy.py` helper from Phase 4 (which stays for unit-test reference) |
 
@@ -92,7 +126,7 @@ create index citation_cache_fetched_at_idx on citation_cache (fetched_at);
 - Eviction: time-based at read; no background job needed (synchronous-only constraint preserved)
 - Miss → adapter call → cache write → return
 
-**Investigator scope clarification (Phase 7):** the Investigator agent's role is to *interpret* search results coming from the adapter layer, not to scrape directly. The LLM call disambiguates fuzzy matches and selects the most likely candidate when an adapter returns several. Adapters themselves are deterministic (no LLM in the hot path of an HTTP scrape).
+**Investigator scope clarification (Phase 7):** the Investigator agent's role is to *interpret* search results coming from the adapter layer, not to scrape directly. The LLM call disambiguates fuzzy matches and selects the most likely candidate when an adapter returns several. Adapters and the Router are deterministic (no LLM in the hot path).
 
 ### Rate limiting
 
@@ -126,4 +160,4 @@ Configured via env vars (`CSJN_RPS`, `SAIJ_RPS`, `JUBA_RPS`) so the values can b
 - No message queue — agent calls are synchronous in the MVP; async job queue is a post-MVP concern
 - No GitHub Pages — static hosting cannot serve the FastAPI backend or dynamic dashboard
 - No headless browser (Playwright/Selenium) — official sources serve server-rendered HTML for the endpoints we use; adding Chromium would exceed Render's free-tier resources
-- No background job queue for scraping — adapter calls are inline within the synchronous request lifecycle, with `asyncio.gather` providing parallelism per request and the Supabase cache absorbing repeated lookups
+- No background job queue for scraping — adapter calls are inline within the synchronous request lifecycle, with `asyncio.gather` providing parallelism only when the Router falls back to fan-out, and the Supabase cache absorbing repeated lookups

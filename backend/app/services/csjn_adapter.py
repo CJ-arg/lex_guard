@@ -1,7 +1,11 @@
 """CSJN Secretaría de Jurisprudencia adapter.
 
-Looks up a citation by Fallos: TOMO:PÁGINA when year_tomo_folio contains that format,
-then falls back to a carátula search. Returns a list of SourceResult dicts.
+Two-step flow:
+  1. GET /sjconsulta/consultaSumarios/buscarSumarios.html → establishes SJCONSULTASESSION
+  2. POST /sjconsulta/consultaSumarios/buscar.html with filter.autos=<case_name>
+  3. GET /sjconsulta/consultaSumarios/paginarSumarios.html?startIndex=0 → JSON array
+
+JSON record fields: autos (carátula), caratulaWeb, texto (ruling excerpt), tomo, pagina.
 """
 
 import re
@@ -9,14 +13,15 @@ from typing import TypedDict
 
 import httpx
 from rapidfuzz import fuzz
-from selectolax.parser import HTMLParser
 
 from app.services.rate_limiter import csjn_limiter
 
-_BASE = "https://sjconsulta.csjn.gov.ar/sjconsulta/fallos"
-_SEARCH_URL = "https://sjconsulta.csjn.gov.ar/sjconsulta/fallos/listarFallosByIdFallo.do"
-_DETAIL_URL = "https://sjconsulta.csjn.gov.ar/sjconsulta/fallos/verFallo.html"
-_TIMEOUT = 15.0
+_BASE = "https://sjconsulta.csjn.gov.ar/sjconsulta"
+_SEARCH_PAGE = f"{_BASE}/consultaSumarios/buscarSumarios.html"
+_BUSCAR_URL = f"{_BASE}/consultaSumarios/buscar.html"
+_PAGINAR_URL = f"{_BASE}/consultaSumarios/paginarSumarios.html"
+_FALLO_URL = "https://sjconsulta.csjn.gov.ar/sjconsulta/fallos/verFallo.html"
+_TIMEOUT = 20.0
 
 
 class SourceResult(TypedDict):
@@ -36,42 +41,27 @@ def _parse_tomo_pagina(year_tomo_folio: str) -> tuple[str, str] | None:
     return None
 
 
-def _parse_result_html(html: str, case_name: str) -> list[SourceResult]:
-    tree = HTMLParser(html)
+def _parse_json_results(records: list[dict], case_name: str) -> list[SourceResult]:
     results: list[SourceResult] = []
-
-    rows = tree.css("table.tablaCuerpo tr, table.resultados tr, tr.resultado")
-    for row in rows:
-        cells = row.css("td")
-        if len(cells) < 2:
-            continue
-        caratula_node = cells[0]
-        caratula = caratula_node.text(strip=True)
+    for rec in records:
+        caratula = rec.get("autos") or rec.get("caratulaWeb") or ""
         if not caratula:
             continue
-
-        link_node = caratula_node.css_first("a")
-        source_url = None
-        if link_node:
-            href = link_node.attributes.get("href", "")
-            if href:
-                source_url = href if href.startswith("http") else f"https://sjconsulta.csjn.gov.ar{href}"
-
-        # Grab first paragraph as ruling excerpt
-        ruling_text = cells[-1].text(strip=True) or caratula_node.text(strip=True)
-
-        score = fuzz.token_sort_ratio(case_name.lower(), caratula.lower()) / 100.0
+        texto = (rec.get("texto") or "").strip()
+        tomo = rec.get("tomo") or ""
+        pagina = rec.get("pagina") or ""
+        source_url = f"{_FALLO_URL}?id={tomo}-{pagina}" if tomo and pagina else None
+        score = fuzz.WRatio(case_name.lower(), caratula.lower()) / 100.0
         results.append(
             SourceResult(
                 found=True,
                 canonical_caratula=caratula,
-                ruling_text=ruling_text[:2000],
+                ruling_text=texto[:2000] if texto else None,
                 source="CSJN",
                 source_url=source_url,
                 match_score=score,
             )
         )
-
     return results
 
 
@@ -85,17 +75,34 @@ async def fetch(citation: dict, client: httpx.AsyncClient | None = None) -> list
 
     try:
         async with csjn_limiter:
+            # Step 1: establish session cookie
+            await client.get(_SEARCH_PAGE)
+
+            # Step 2: POST search form
+            form_data: dict[str, str] = {"filter.autos": case_name}
             tomo_pagina = _parse_tomo_pagina(year_tomo_folio)
             if tomo_pagina:
-                tomo, pagina = tomo_pagina
-                params = {"idFalloMin": f"{tomo}-{pagina}", "idFalloMax": f"{tomo}-{pagina}"}
-            else:
-                params = {"caratula": case_name, "maxRows": "10"}
+                form_data["filter.tomo"] = tomo_pagina[0]
+                form_data["filter.pagina"] = tomo_pagina[1]
 
-            resp = await client.get(_SEARCH_URL, params=params)
+            await client.post(_BUSCAR_URL, data=form_data)
+
+            # Step 3: paginated JSON results
+            resp = await client.get(_PAGINAR_URL, params={"startIndex": "0"})
             resp.raise_for_status()
 
-        candidates = _parse_result_html(resp.text, case_name)
+        data = resp.json()
+        if isinstance(data, list):
+            records = data
+        else:
+            records = (
+                data.get("sumarios")
+                or data.get("results")
+                or data.get("items")
+                or []
+            )
+
+        candidates = _parse_json_results(records, case_name)
         return sorted(candidates, key=lambda r: r["match_score"], reverse=True)[:5]
 
     except Exception:

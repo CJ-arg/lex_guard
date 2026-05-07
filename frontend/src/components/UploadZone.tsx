@@ -11,8 +11,8 @@ interface Props {
 
 function validate(file: File): string | null {
   const ext = "." + file.name.split(".").pop()?.toLowerCase();
-  if (!ALLOWED.includes(ext)) return "Only PDF and DOCX files are accepted.";
-  if (file.size > MAX_BYTES) return "File exceeds the 1 MB size limit.";
+  if (!ALLOWED.includes(ext)) return "Solo se aceptan archivos PDF y DOCX.";
+  if (file.size > MAX_BYTES) return "El archivo supera el límite de 1 MB.";
   return null;
 }
 
@@ -31,6 +31,9 @@ export default function UploadZone({ onFile }: Props) {
   return (
     <div className="flex flex-col items-center gap-4 w-full max-w-lg">
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Subir documento PDF o DOCX"
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => {
@@ -40,14 +43,20 @@ export default function UploadZone({ onFile }: Props) {
           if (file) handle(file);
         }}
         onClick={() => inputRef.current?.click()}
-        className={`w-full border-2 border-dashed rounded-xl p-12 flex flex-col items-center gap-3 cursor-pointer transition-colors
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        className={`w-full border-2 border-dashed rounded-xl p-12 flex flex-col items-center gap-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black
           ${dragging ? "border-blue-500 bg-blue-950/20" : "border-zinc-600 hover:border-zinc-400"}`}
       >
-        <span className="text-4xl">📄</span>
+        <span className="text-4xl" aria-hidden="true">📄</span>
         <p className="text-zinc-300 text-sm text-center">
-          Drag and drop a <strong>PDF</strong> or <strong>DOCX</strong> brief here
+          Arrastre un archivo <strong>PDF</strong> o <strong>DOCX</strong> aquí
         </p>
-        <p className="text-zinc-500 text-xs">or click to browse — max 1 MB</p>
+        <p className="text-zinc-500 text-xs">o haga clic para seleccionar — máx. 1 MB</p>
       </div>
 
       <input
@@ -63,7 +72,7 @@ export default function UploadZone({ onFile }: Props) {
       />
 
       {error && (
-        <p className="text-red-400 text-sm text-center">{error}</p>
+        <p role="alert" className="text-red-400 text-sm text-center">{error}</p>
       )}
     </div>
   );

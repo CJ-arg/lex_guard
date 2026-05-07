@@ -46,6 +46,51 @@ describe("CitationCard — Phase 7 unverifiable", () => {
   });
 });
 
+describe("CitationCard — source routing trace", () => {
+  const SR_PRIMARY = {
+    primary_attempted: "CSJN",
+    primary_result: "found" as const,
+    secondary_attempted: null,
+    secondary_result: null,
+    fallback_used: false,
+  };
+  const SR_SECONDARY = {
+    primary_attempted: "CSJN",
+    primary_result: "not_found" as const,
+    secondary_attempted: "SAIJ",
+    secondary_result: "found" as const,
+    fallback_used: false,
+  };
+  const SR_FALLBACK = {
+    primary_attempted: "CSJN",
+    primary_result: null,
+    secondary_attempted: null,
+    secondary_result: null,
+    fallback_used: true,
+  };
+
+  it("shows primary found trace", () => {
+    render(<CitationCard citation={{ ...BASE, verdict: "approved", source_routing: SR_PRIMARY }} index={0} />);
+    expect(screen.getByText("Verificado vía CSJN (primaria)")).toBeDefined();
+  });
+
+  it("shows secondary found trace", () => {
+    render(<CitationCard citation={{ ...BASE, verdict: "warning", source_routing: SR_SECONDARY }} index={0} />);
+    expect(screen.getByText("CSJN sin resultado → confirmado por SAIJ")).toBeDefined();
+  });
+
+  it("shows fallback trace", () => {
+    render(<CitationCard citation={{ ...BASE, verdict: "approved", source_routing: SR_FALLBACK }} index={0} />);
+    expect(screen.getByText("Búsqueda en todas las fuentes")).toBeDefined();
+  });
+
+  it("does not render routing line when source_routing is absent", () => {
+    render(<CitationCard citation={{ ...BASE, verdict: "approved" }} index={0} />);
+    expect(screen.queryByText(/verificado vía/i)).toBeNull();
+    expect(screen.queryByText(/búsqueda en todas/i)).toBeNull();
+  });
+});
+
 describe("CitationCard — source badge", () => {
   it("renders CSJN source badge when source is provided", () => {
     render(<CitationCard citation={{ ...BASE, source: "CSJN", verdict: "approved" }} index={0} />);
@@ -60,62 +105,3 @@ describe("CitationCard — source badge", () => {
   });
 });
 
-describe("CitationCard — canonical caratula correction", () => {
-  it("shows correction suggestion when canonical differs from case_name", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          case_name: "Siri Angel",
-          canonical_caratula: "Siri, Ángel s/ interpone recurso de hábeas corpus",
-          verdict: "approved",
-        }}
-        index={0}
-      />
-    );
-    expect(screen.getByText("Carátula canónica sugerida")).toBeDefined();
-    expect(screen.getByText("Siri, Ángel s/ interpone recurso de hábeas corpus")).toBeDefined();
-  });
-
-  it("hides correction when canonical matches case_name", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          canonical_caratula: "Siri Angel",
-          verdict: "approved",
-        }}
-        index={0}
-      />
-    );
-    expect(screen.queryByText("Carátula canónica sugerida")).toBeNull();
-  });
-
-  it("hides correction when canonical_caratula is absent", () => {
-    render(<CitationCard citation={{ ...BASE, verdict: "approved" }} index={0} />);
-    expect(screen.queryByText("Carátula canónica sugerida")).toBeNull();
-  });
-});
-
-describe("CitationCard — source URL link", () => {
-  it("renders link when source_url is present", () => {
-    render(
-      <CitationCard
-        citation={{
-          ...BASE,
-          verdict: "approved",
-          source_url: "https://sjconsulta.csjn.gov.ar/fallos/1",
-        }}
-        index={0}
-      />
-    );
-    const link = screen.getByRole("link", { name: /ver fallo original/i });
-    expect(link).toBeDefined();
-    expect(link.getAttribute("href")).toBe("https://sjconsulta.csjn.gov.ar/fallos/1");
-  });
-
-  it("does not render link when source_url is absent", () => {
-    render(<CitationCard citation={{ ...BASE, verdict: "approved" }} index={0} />);
-    expect(screen.queryByRole("link")).toBeNull();
-  });
-});

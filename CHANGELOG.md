@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-03
+- Disable JUBA fetch until WebForms POST is implemented
+- Fix: reject low-score adapter results (< 0.50) as unverifiable
+- Restore fixes reverted by rebase: async investigator + javascript: href guard
+- Fix: degrade to warning instead of crashing when LLM judge fails
+- Fix: handle empty ruling_text and empty LLM response in judge
+
 ## 2026-05-02
 - Phase 6: Supabase persistence — save sessions, permalink, read-only view (#5)
 

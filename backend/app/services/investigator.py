@@ -1,59 +1,38 @@
-"""Real Investigator: fans out to CSJN, SAIJ, and JUBA in parallel.
+"""Real Investigator: routes citations to their natural source, then dispatches.
 
-Disambiguation flow:
-  - 0 candidates  → unverifiable
-  - 1 candidate, score >= DIRECT_THRESHOLD  → direct return
-  - multiple candidates  → Haiku LLM picks the best match
-  - winner written to citation_cache
+Dispatch flow (per citation):
+  1. router.route()  →  primary, secondary?, fallback?
+  2. fallback=True   →  asyncio.gather on all three adapters (fan-out)
+  3. fallback=False  →  call primary; if no result call secondary; record each
+  4. winner = highest-scoring candidate above MIN_SCORE, preferring CSJN (has texto)
+  5. winner written to citation_cache
 """
 
 import asyncio
-import json
-import os
-from typing import Any
-
-import anthropic
+from typing import Any, Literal
 
 from app.services import csjn_adapter, juba_adapter, saij_adapter
 from app.services.citation_cache import get_cached, set_cached
+from app.services.router import SourceKey, route
 
-DIRECT_THRESHOLD = 0.85
+MIN_SCORE = 0.80  # WRatio; below this we are not confident it's the same case
 
-_client: anthropic.Anthropic | None = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
+_ADAPTERS: dict[SourceKey, Any] = {
+    "CSJN": csjn_adapter,
+    "SAIJ": saij_adapter,
+    "JUBA": juba_adapter,
+}
 
 
-def _disambiguate(case_name: str, candidates: list[dict]) -> dict:
-    numbered = "\n".join(
-        f"{i + 1}. [{c['source']}] {c['canonical_caratula']} (score={c['match_score']:.2f})"
-        for i, c in enumerate(candidates)
+def _best_candidate(candidates: list[dict]) -> dict:
+    """Prefer candidates with ruling text, then by score."""
+    return max(
+        candidates,
+        key=lambda c: (bool(c.get("ruling_text")), c["match_score"]),
     )
-    prompt = (
-        f"Carátula buscada: {case_name}\n\n"
-        f"Candidatos encontrados:\n{numbered}\n\n"
-        "Responde ÚNICAMENTE con un JSON: {\"index\": <número del mejor candidato, base 1>}"
-    )
-    msg = _get_client().messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=64,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = msg.content[0].text.strip()
-    try:
-        data = json.loads(raw)
-        idx = int(data["index"]) - 1
-        return candidates[max(0, min(idx, len(candidates) - 1))]
-    except Exception:
-        return candidates[0]
 
 
-def _build_result(citation: dict, winner: dict) -> dict:
+def _build_result(citation: dict, winner: dict, source_routing: dict) -> dict:
     return {
         **citation,
         "found": True,
@@ -63,7 +42,19 @@ def _build_result(citation: dict, winner: dict) -> dict:
         "match_score": winner.get("match_score", 0.0),
         "canonical_caratula": winner.get("canonical_caratula"),
         "unverifiable": False,
+        "source_routing": source_routing,
     }
+
+
+async def _call_adapter(source: SourceKey, citation: dict) -> list[dict]:
+    try:
+        return await _ADAPTERS[source].fetch(citation) or []
+    except Exception:
+        return []
+
+
+def _passing(results: list[dict]) -> list[dict]:
+    return [r for r in results if r.get("match_score", 0.0) >= MIN_SCORE]
 
 
 async def _investigate_one(citation: dict) -> dict:
@@ -81,30 +72,51 @@ async def _investigate_one(citation: dict) -> dict:
             "match_score": cached.get("match_score", 0.0),
             "canonical_caratula": cached.get("canonical_caratula"),
             "unverifiable": False,
+            "source_routing": cached.get("source_routing"),
         }
 
-    raw_results = await asyncio.gather(
-        csjn_adapter.fetch(citation),
-        saij_adapter.fetch(citation),
-        juba_adapter.fetch(citation),
-        return_exceptions=True,
-    )
+    decision = route(citation)
+    source_routing: dict[str, Any] = {
+        "primary_attempted": decision["primary"],
+        "primary_result": None,
+        "secondary_attempted": None,
+        "secondary_result": None,
+        "fallback_used": decision["fallback"],
+    }
 
-    candidates: list[dict[str, Any]] = []
-    for r in raw_results:
-        if isinstance(r, list):
-            candidates.extend(r)
+    if decision["fallback"]:
+        # Fan-out: all three in parallel
+        raw = await asyncio.gather(
+            _call_adapter("CSJN", citation),
+            _call_adapter("SAIJ", citation),
+            _call_adapter("JUBA", citation),
+        )
+        candidates = _passing([c for bucket in raw for c in bucket])
+    else:
+        # Sequential: primary first, secondary if needed
+        primary_results = await _call_adapter(decision["primary"], citation)
+        candidates = _passing(primary_results)
+
+        if candidates:
+            source_routing["primary_result"] = "found"
+        else:
+            source_routing["primary_result"] = "not_found"
+
+            if decision["secondary"]:
+                source_routing["secondary_attempted"] = decision["secondary"]
+                secondary_results = await _call_adapter(decision["secondary"], citation)
+                candidates = _passing(secondary_results)
+                source_routing["secondary_result"] = "found" if candidates else "not_found"
 
     if not candidates:
-        return {**citation, "found": False, "unverifiable": True}
+        return {
+            **citation,
+            "found": False,
+            "unverifiable": True,
+            "source_routing": source_routing,
+        }
 
-    candidates.sort(key=lambda c: c["match_score"], reverse=True)
-    best = candidates[0]
-
-    if len(candidates) == 1 or best["match_score"] >= DIRECT_THRESHOLD:
-        winner = best
-    else:
-        winner = _disambiguate(case_name, candidates[:5])
+    winner = _best_candidate(candidates)
 
     set_cached(
         case_name,
@@ -116,12 +128,8 @@ async def _investigate_one(citation: dict) -> dict:
         match_score=winner.get("match_score", 0.0),
     )
 
-    return _build_result(citation, winner)
+    return _build_result(citation, winner, source_routing)
 
 
-async def _investigate_all(citations: list[dict]) -> list[dict]:
+async def investigate_citations(citations: list[dict]) -> list[dict]:
     return list(await asyncio.gather(*[_investigate_one(c) for c in citations]))
-
-
-def investigate_citations(citations: list[dict]) -> list[dict]:
-    return asyncio.run(_investigate_all(citations))

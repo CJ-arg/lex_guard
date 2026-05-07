@@ -1,20 +1,27 @@
 """SAIJ (saij.gob.ar) adapter.
 
-Searches jurisprudencia-nacional by carátula + año. Returns list of SourceResult dicts.
+Uses the /busqueda JSON API (discovered from query-object.js).
+Response: searchResults.documentResultList[].documentAbstract (JSON)
+  -> document.content.{actor, sobre, tribunal, fecha}
+
+SAIJ confirms case existence only — direct document URLs return 500.
+source_url points to the SAIJ search page for the carátula.
 """
 
+import json
 import re
+import urllib.parse
 from typing import TypedDict
 
 import httpx
 from rapidfuzz import fuzz
-from selectolax.parser import HTMLParser
 
 from app.services.rate_limiter import saij_limiter
 
-_SEARCH_URL = "https://saij.gob.ar/buscar"
+_SEARCH_URL = "https://saij.gob.ar/busqueda"
 _BASE = "https://saij.gob.ar"
-_TIMEOUT = 15.0
+_TIMEOUT = 20.0
+_JURISP_FACET = "Tipo de Documento/Jurisprudencia[1,1]"
 
 
 class SourceResult(TypedDict):
@@ -31,48 +38,39 @@ def _extract_year(year_tomo_folio: str) -> str:
     return m.group(0) if m else ""
 
 
-def _parse_search_html(html: str, case_name: str) -> list[SourceResult]:
-    tree = HTMLParser(html)
+def _parse_api_response(data: dict, case_name: str) -> list[SourceResult]:
     results: list[SourceResult] = []
+    doc_list = (data.get("searchResults") or {}).get("documentResultList") or []
 
-    # SAIJ result cards vary across redesigns; try common selectors
-    items = (
-        tree.css("article.resultado")
-        or tree.css("div.resultado")
-        or tree.css("li.resultado")
-        or tree.css(".search-result")
-        or tree.css("div[class*='result']")
-    )
-
-    for item in items:
-        title_node = (
-            item.css_first("h2")
-            or item.css_first("h3")
-            or item.css_first(".titulo")
-            or item.css_first("a")
-        )
-        if not title_node:
-            continue
-        caratula = title_node.text(strip=True)
-        if not caratula:
+    for item in doc_list:
+        raw_abstract = item.get("documentAbstract", "")
+        try:
+            abstract = json.loads(raw_abstract) if isinstance(raw_abstract, str) else raw_abstract
+        except (json.JSONDecodeError, TypeError):
             continue
 
-        link_node = item.css_first("a")
-        source_url = None
-        if link_node:
-            href = link_node.attributes.get("href", "")
-            if href:
-                source_url = href if href.startswith("http") else f"{_BASE}{href}"
+        doc = abstract.get("document", abstract)
+        if not isinstance(doc, dict):
+            continue
 
-        excerpt_node = item.css_first("p, .resumen, .extracto, .sumario")
-        ruling_text = excerpt_node.text(strip=True) if excerpt_node else caratula
+        content = doc.get("content", {})
+        meta = doc.get("metadata", {})
 
-        score = fuzz.token_sort_ratio(case_name.lower(), caratula.lower()) / 100.0
+        actor = (content.get("actor") or "").strip()
+        sobre = (content.get("sobre") or "").strip()
+        if not actor:
+            continue
+
+        caratula = f"{actor} {sobre}".strip() if sobre else actor
+
+        source_url = f"{_BASE}/buscador/jurisprudencia-nacional?busqueda={urllib.parse.quote(caratula)}"
+
+        score = fuzz.WRatio(case_name.lower(), caratula.lower()) / 100.0
         results.append(
             SourceResult(
                 found=True,
                 canonical_caratula=caratula,
-                ruling_text=ruling_text[:2000],
+                ruling_text=None,  # SAIJ exposes no sumario text; detail endpoints return 500
                 source="SAIJ",
                 source_url=source_url,
                 match_score=score,
@@ -91,19 +89,22 @@ async def fetch(citation: dict, client: httpx.AsyncClient | None = None) -> list
 
     owns_client = client is None
     if owns_client:
-        client = httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True)
+        # SAIJ has an expired/self-signed cert; verify=False is intentional
+        client = httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True, verify=False)
 
     try:
         async with saij_limiter:
             params = {
                 "q": query,
-                "tipo-documento": "jurisprudencia",
-                "tipo-organismo": "nacional",
+                "f": _JURISP_FACET,
+                "p": "5",
+                "o": "0",
             }
             resp = await client.get(_SEARCH_URL, params=params)
             resp.raise_for_status()
 
-        candidates = _parse_search_html(resp.text, case_name)
+        data = resp.json()
+        candidates = _parse_api_response(data, case_name)
         return sorted(candidates, key=lambda r: r["match_score"], reverse=True)[:5]
 
     except Exception:

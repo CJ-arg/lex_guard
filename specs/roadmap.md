@@ -45,12 +45,21 @@ Phases are intentionally focused — each one is a shippable slice of work, inde
 
 ## Phase 7 — Real Investigator
 - Replace the stub with a real source-adapter layer querying three official repositories: **CSJN** (canonical lookup by `Fallos: TOMO:PÁGINA`), **SAIJ** (national + provincial jurisprudence), and **JUBA** (Buenos Aires jurisprudence)
-- Adapter contract internal-only (`SourceResult`); public Phase 4 contract `{found, ruling_text}` extended with **optional** fields `source`, `source_url`, `match_score`, `canonical_caratula` — backward compatible with Phase 5 Judge and Phase 4 UI badges
-- Investigator orchestrates: parallel fan-out via `asyncio.gather`, in-memory rate limiter per source, Supabase `citation_cache` for repeated lookups (30-day TTL)
+- Adapter contract internal-only (`SourceResult`); public Phase 4 contract `{found, ruling_text}` extended with **optional** fields `source`, `source_url`, `match_score`, `canonical_caratula`, `source_routing` — backward compatible with Phase 5 Judge and Phase 4 UI badges
+- **Deterministic Router** (`backend/app/services/router.py`) maps each citation to the source that natively covers its court, based on the `court` field and the shape of `year_tomo_folio`. The Router returns an ordered dispatch list `[primary, secondary?]`. Fan-out to all three adapters is reserved as fallback when the court is empty, ambiguous, or unrecognizable
+- Investigator orchestrates: calls primary; if `found: false`, tries secondary; if both fail (or fan-out fallback is in effect), runs the remaining adapters via `asyncio.gather`. Per-source rate limiter via `asyncio.Semaphore`; Supabase `citation_cache` for repeated lookups (30-day TTL)
+- Routing rules (initial, lives in `router.py` as a list of `(regex, primary, secondary)` tuples):
+  - `Fallos: T:P` format detected → primary CSJN, secondary SAIJ
+  - `court` matches `CSJN` / `Corte Suprema` / `C.S.J.N.` → primary CSJN, secondary SAIJ
+  - `court` matches `SCBA` / `Suprema Corte de Buenos Aires` → primary JUBA, secondary SAIJ
+  - `court` matches federal/national chambers (`CNCiv`, `CNCom`, `CNFed`, etc.) → primary SAIJ, no secondary
+  - `court` matches Buenos Aires provincial chambers → primary JUBA, secondary SAIJ
+  - `court` matches other provincial supreme courts → primary SAIJ, no secondary
+  - `court` empty / ambiguous → fan-out to CSJN + SAIJ + JUBA
 - Fuzzy matcher upgraded from pure-Python Levenshtein (Phase 4 reference impl) to `rapidfuzz` for production; typos and transposed carátulas surface as correction suggestions, not false `danger` verdicts
-- Attorney sees the corrected carátula and the canonical source URL alongside the original when a near-match is found
-- Graceful degradation: if all sources fail (network error, source down, captcha), verdict is flagged as `unverifiable` (not `danger`); HTTP 502 from a single adapter does not poison the verdict for the citation if other adapters succeed
-- Out of scope for Phase 7: PJN cámaras nacionales beyond what SAIJ already indexes, other provincial cortes, doctrine. These are Phase 9+ work
+- Attorney sees, alongside each verdict, which source was the primary, whether the secondary was needed, and the canonical source URL — communicating the level of confidence honestly (a result confirmed by the canonical source reads as stronger than one confirmed only by the cross-validator)
+- Graceful degradation: if all consulted sources fail (network error, source down, captcha), verdict is flagged as `unverifiable` (not `danger`); HTTP 502 from a single adapter does not poison the verdict for the citation if other adapters succeed
+- Out of scope for Phase 7: PJN cámaras nacionales beyond what SAIJ already indexes, other provincial cortes, doctrine, and international citations (CIDH / TJUE — flagged as `unverifiable_out_of_scope`). These are Phase 9+ work
 
 ## Phase 8 — Hardening & Edge Cases
 - Large document support: chunk briefs over a configurable page threshold before passing to the Extractor

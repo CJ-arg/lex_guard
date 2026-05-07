@@ -49,7 +49,7 @@ def _parse_results_html(html: str, case_name: str) -> list[SourceResult]:
         source_url = None
         if link_node:
             href = link_node.attributes.get("href", "")
-            if href:
+            if href and not href.startswith("javascript:"):
                 source_url = href if href.startswith("http") else f"{_BASE}/{href.lstrip('/')}"
 
         ruling_text = cells[-1].text(strip=True) if len(cells) > 1 else caratula
@@ -70,24 +70,9 @@ def _parse_results_html(html: str, case_name: str) -> list[SourceResult]:
 
 
 async def fetch(citation: dict, client: httpx.AsyncClient | None = None) -> list[SourceResult]:
-    case_name = citation.get("case_name", "")
-
-    owns_client = client is None
-    if owns_client:
-        client = httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True)
-
-    try:
-        async with juba_limiter:
-            # JUBA accepts GET params for the search form
-            params = {"caratula": case_name}
-            resp = await client.get(_SEARCH_URL, params=params)
-            resp.raise_for_status()
-
-        candidates = _parse_results_html(resp.text, case_name)
-        return sorted(candidates, key=lambda r: r["match_score"], reverse=True)[:5]
-
-    except Exception:
-        return []
-    finally:
-        if owns_client:
-            await client.aclose()
+    # JUBA uses ASP.NET WebForms: search requires a POST with __VIEWSTATE and
+    # __EVENTVALIDATION tokens obtained from a prior GET. A plain GET to
+    # /busquedas.aspx returns the blank search page whose nav/form elements
+    # produce false matches. Disabled until proper two-step WebForms flow is
+    # implemented.
+    return []

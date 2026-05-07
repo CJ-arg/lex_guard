@@ -1,20 +1,59 @@
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.saij_adapter import _extract_year, _parse_search_html, fetch
+from app.services.saij_adapter import _extract_year, _parse_api_response, fetch
 
-_SAMPLE_HTML = """
-<html><body>
-  <article class="resultado">
-    <h2><a href="/jurisprudencia/siri-angel-123">Siri, Ángel s/ interpone recurso de hábeas corpus</a></h2>
-    <p class="resumen">Las garantías constitucionales son operativas.</p>
-  </article>
-  <article class="resultado">
-    <h2><a href="/jurisprudencia/halabi-456">Halabi, Ernesto c/ P.E.N.</a></h2>
-    <p class="resumen">La acción de clase procede cuando existe hecho único.</p>
-  </article>
-</body></html>
-"""
+_SAMPLE_API_RESPONSE = {
+    "searchResults": {
+        "documentResultList": [
+            {
+                "documentScore": 0.9,
+                "uuid": "abc-123",
+                "documentAbstract": json.dumps({
+                    "document": {
+                        "metadata": {
+                            "uuid": "abc-123",
+                            "friendly-url": {
+                                "subdomain": "sentencia",
+                                "description": "corte-suprema-siri-angel-1957-12-27",
+                            },
+                        },
+                        "content": {
+                            "tribunal": "CORTE SUPREMA DE JUSTICIA DE LA NACION",
+                            "tipo-fallo": "SENTENCIA",
+                            "fecha": "1957-12-27",
+                            "actor": "Siri, Angel",
+                            "sobre": "interpone recurso de habeas corpus",
+                        },
+                    }
+                }),
+            },
+            {
+                "documentScore": 0.5,
+                "uuid": "def-456",
+                "documentAbstract": json.dumps({
+                    "document": {
+                        "metadata": {
+                            "uuid": "def-456",
+                            "friendly-url": {
+                                "subdomain": "sentencia",
+                                "description": "corte-suprema-halabi-2009-02-24",
+                            },
+                        },
+                        "content": {
+                            "tribunal": "CORTE SUPREMA DE JUSTICIA DE LA NACION",
+                            "tipo-fallo": "SENTENCIA",
+                            "fecha": "2009-02-24",
+                            "actor": "Halabi, Ernesto",
+                            "sobre": "recurso de hecho deducido",
+                        },
+                    }
+                }),
+            },
+        ]
+    }
+}
 
 
 def test_extract_year_from_tomo_folio():
@@ -23,23 +62,48 @@ def test_extract_year_from_tomo_folio():
     assert _extract_year("330:4921 año 2008") == "2008"
 
 
-def test_parse_search_html_extracts_articles():
-    results = _parse_search_html(_SAMPLE_HTML, "Siri Angel")
+def test_parse_api_response_extracts_records():
+    results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
     assert len(results) == 2
 
 
-def test_parse_search_html_ranks_siri_first():
-    results = _parse_search_html(_SAMPLE_HTML, "Siri Angel")
+def test_parse_api_response_ranks_siri_first():
+    results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
     assert "Siri" in results[0]["canonical_caratula"]
 
 
-def test_parse_search_html_builds_absolute_url():
-    results = _parse_search_html(_SAMPLE_HTML, "Siri Angel")
-    assert results[0]["source_url"].startswith("https://")
+def test_parse_api_response_builds_source_url():
+    results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
+    assert results[0]["source_url"].startswith("https://saij.gob.ar/buscador/")
 
 
-def test_parse_search_html_empty_returns_empty():
-    assert _parse_search_html("<html><body></body></html>", "test") == []
+def test_parse_api_response_empty_returns_empty():
+    assert _parse_api_response({}, "test") == []
+    assert _parse_api_response({"searchResults": {"documentResultList": []}}, "test") == []
+
+
+def test_parse_api_response_ruling_text_is_none():
+    results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
+    for r in results:
+        assert r["ruling_text"] is None, "SAIJ returns no real sumario text"
+
+
+def test_parse_api_response_skips_record_without_actor():
+    data = {
+        "searchResults": {
+            "documentResultList": [
+                {
+                    "documentAbstract": json.dumps({
+                        "document": {
+                            "metadata": {},
+                            "content": {"tribunal": "CSJN", "sobre": "algo"},
+                        }
+                    })
+                }
+            ]
+        }
+    }
+    assert _parse_api_response(data, "test") == []
 
 
 def test_fetch_returns_empty_on_error():
@@ -58,7 +122,7 @@ def test_fetch_returns_empty_on_error():
 def test_fetch_parses_results():
     async def run():
         mock_resp = MagicMock()
-        mock_resp.text = _SAMPLE_HTML
+        mock_resp.json.return_value = _SAMPLE_API_RESPONSE
         mock_resp.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()

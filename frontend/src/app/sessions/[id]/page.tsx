@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { API_URL } from "@/lib/api";
+import { API_URL, fetchWithTimeout } from "@/lib/api";
 import CitationList from "@/components/CitationList";
 import { type Citation } from "@/components/CitationCard";
 
@@ -20,14 +20,14 @@ export default function SessionPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/sessions/${id}`)
+    fetchWithTimeout(`${API_URL}/sessions/${id}`)
       .then((res) => {
         if (res.status === 404) throw new Error("Informe no encontrado.");
         if (!res.ok) throw new Error("Error al cargar el informe.");
         return res.json();
       })
       .then(setSession)
-      .catch((e) => setError(e.message));
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Error al cargar el informe."));
   }, [id]);
 
   return (
@@ -39,7 +39,15 @@ export default function SessionPage() {
       )}
 
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <div className="flex flex-col items-center gap-3">
+          <p role="alert" className="text-red-400 text-sm text-center">{error}</p>
+          <a
+            href="/"
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            Verificar un nuevo documento
+          </a>
+        </div>
       )}
 
       {session && (
