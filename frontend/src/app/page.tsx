@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_URL } from "@/lib/api";
+import { API_URL, fetchWithTimeout } from "@/lib/api";
 import UploadZone from "@/components/UploadZone";
 import TextPanel from "@/components/TextPanel";
 import CitationList from "@/components/CitationList";
@@ -38,11 +38,11 @@ function ErrorActions({ message, onRetry, onReset }: { message: string; onRetry:
       <p className="text-red-400 text-sm text-center max-w-sm">{message}</p>
       <div className="flex gap-3">
         <button onClick={onRetry} className="text-sm text-blue-400 hover:text-blue-300 transition-colors">
-          Try again
+          Reintentar
         </button>
         <span className="text-zinc-600">·</span>
         <button onClick={onReset} className="text-sm text-zinc-400 hover:text-zinc-300 transition-colors">
-          Upload another document
+          Subir otro documento
         </button>
       </div>
     </div>
@@ -55,52 +55,52 @@ export default function Home() {
   async function runJudge(filename: string, citations: Citation[]) {
     setState({ phase: "judging", filename, citations });
     try {
-      const res = await fetch(`${API_URL}/judge`, {
+      const res = await fetchWithTimeout(`${API_URL}/judge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ citations }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setState({ phase: "judge_error", message: data.detail ?? "Judge failed.", filename, citations });
+        setState({ phase: "judge_error", message: data.detail ?? "Error al evaluar las citas.", filename, citations });
         return;
       }
       setState({ phase: "citations", filename, citations: data.citations });
-    } catch {
-      setState({ phase: "judge_error", message: "Could not reach the API. Is the backend running?", filename, citations });
+    } catch (err) {
+      setState({ phase: "judge_error", message: err instanceof Error ? err.message : "Error al evaluar las citas.", filename, citations });
     }
   }
 
   async function runInvestigate(filename: string, citations: Citation[]) {
     setState({ phase: "investigating", filename, citations });
     try {
-      const res = await fetch(`${API_URL}/investigate`, {
+      const res = await fetchWithTimeout(`${API_URL}/investigate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ citations }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setState({ phase: "investigate_error", message: data.detail ?? "Investigation failed.", filename, citations });
+        setState({ phase: "investigate_error", message: data.detail ?? "Error al verificar las citas.", filename, citations });
         return;
       }
       await runJudge(filename, data.citations);
-    } catch {
-      setState({ phase: "investigate_error", message: "Could not reach the API. Is the backend running?", filename, citations });
+    } catch (err) {
+      setState({ phase: "investigate_error", message: err instanceof Error ? err.message : "Error al verificar las citas.", filename, citations });
     }
   }
 
   async function runExtract(filename: string, text: string) {
     setState({ phase: "extracting", filename, text });
     try {
-      const res = await fetch(`${API_URL}/extract`, {
+      const res = await fetchWithTimeout(`${API_URL}/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setState({ phase: "extract_error", message: data.detail ?? "Extraction failed.", filename, text });
+        setState({ phase: "extract_error", message: data.detail ?? "Error al extraer las citas.", filename, text });
         return;
       }
       const citations: Citation[] = data.citations;
@@ -109,8 +109,8 @@ export default function Home() {
       } else {
         await runInvestigate(filename, citations);
       }
-    } catch {
-      setState({ phase: "extract_error", message: "Could not reach the API. Is the backend running?", filename, text });
+    } catch (err) {
+      setState({ phase: "extract_error", message: err instanceof Error ? err.message : "Error al extraer las citas.", filename, text });
     }
   }
 
@@ -119,15 +119,15 @@ export default function Home() {
     const body = new FormData();
     body.append("file", file);
     try {
-      const res = await fetch(`${API_URL}/upload`, { method: "POST", body });
+      const res = await fetchWithTimeout(`${API_URL}/upload`, { method: "POST", body });
       const data = await res.json();
       if (!res.ok) {
-        setState({ phase: "upload_error", message: data.detail ?? "Upload failed." });
+        setState({ phase: "upload_error", message: data.detail ?? "Error al subir el documento." });
         return;
       }
       await runExtract(data.filename, data.text);
-    } catch {
-      setState({ phase: "upload_error", message: "Could not reach the API. Is the backend running?" });
+    } catch (err) {
+      setState({ phase: "upload_error", message: err instanceof Error ? err.message : "Error al subir el documento." });
     }
   }
 

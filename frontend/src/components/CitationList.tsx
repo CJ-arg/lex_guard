@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { API_URL } from "@/lib/api";
+import { API_URL, fetchWithTimeout } from "@/lib/api";
 import CitationCard, { type Citation } from "./CitationCard";
 
 interface Props {
@@ -26,19 +26,19 @@ export default function CitationList({ filename, citations, onReset, readOnly, s
   async function handleSave() {
     setSave({ phase: "saving" });
     try {
-      const res = await fetch(`${API_URL}/sessions`, {
+      const res = await fetchWithTimeout(`${API_URL}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document_name: filename, user_note: note || null, citations }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setSave({ phase: "error", message: data.detail ?? "Could not save session." });
+        setSave({ phase: "error", message: data.detail ?? "No se pudo guardar el informe." });
         return;
       }
       setSave({ phase: "saved", session_id: data.session_id });
-    } catch {
-      setSave({ phase: "error", message: "Could not reach the API." });
+    } catch (err) {
+      setSave({ phase: "error", message: err instanceof Error ? err.message : "No se pudo guardar el informe." });
     }
   }
 

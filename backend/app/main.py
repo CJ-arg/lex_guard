@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 load_dotenv()
@@ -12,6 +13,14 @@ from app.services.extractor import extract_docx, extract_pdf
 from app.services.sessions import get_session, save_session
 
 app = FastAPI(title="LexGuard API")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor. Intente nuevamente."},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,8 +67,8 @@ async def upload(file: UploadFile = File(...)):
 
     try:
         text = extract_pdf(data) if ext == ".pdf" else extract_docx(data)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Text extraction failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=422, detail="No se pudo extraer el texto del archivo. Verifique que no esté dañado.")
 
     return {"filename": filename, "text": text}
 
@@ -70,8 +79,8 @@ async def extract(req: ExtractRequest):
         citations = extract_citations(req.text)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al extraer las citas.")
 
     return {"citations": citations}
 
@@ -80,8 +89,8 @@ async def extract(req: ExtractRequest):
 async def investigate(req: InvestigateRequest):
     try:
         results = await investigate_citations(req.citations)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="La verificación falló. Intente nuevamente.")
 
     return {"citations": results}
 
@@ -90,8 +99,8 @@ async def investigate(req: InvestigateRequest):
 async def create_session(req: SaveSessionRequest):
     try:
         session_id = save_session(req.document_name, req.user_note, req.citations)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not save session: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="No se pudo guardar el informe. Intente nuevamente.")
     return {"session_id": session_id}
 
 
@@ -101,8 +110,8 @@ async def read_session(session_id: str):
         session = get_session(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not retrieve session: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error al cargar el informe. Intente nuevamente.")
     return session
 
 
@@ -112,7 +121,7 @@ async def judge(req: InvestigateRequest):
         results = judge_citations(req.citations)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Judge failed: {exc}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno al evaluar las citas.")
 
     return {"citations": results}
