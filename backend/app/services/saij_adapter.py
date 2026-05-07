@@ -65,19 +65,12 @@ def _parse_api_response(data: dict, case_name: str) -> list[SourceResult]:
 
         source_url = f"{_BASE}/buscador/jurisprudencia-nacional?busqueda={urllib.parse.quote(caratula)}"
 
-        tribunal = (content.get("tribunal") or "").strip()
-        fecha = (content.get("fecha") or "").strip()
-        if tribunal and fecha:
-            ruling_text = f"{tribunal} ({fecha}): {sobre}" if sobre else f"{tribunal} ({fecha})"
-        else:
-            ruling_text = sobre or None
-
         score = fuzz.WRatio(case_name.lower(), caratula.lower()) / 100.0
         results.append(
             SourceResult(
                 found=True,
                 canonical_caratula=caratula,
-                ruling_text=ruling_text[:2000] if ruling_text else None,
+                ruling_text=None,  # SAIJ exposes no sumario text; detail endpoints return 500
                 source="SAIJ",
                 source_url=source_url,
                 match_score=score,

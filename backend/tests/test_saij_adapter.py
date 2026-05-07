@@ -82,6 +82,12 @@ def test_parse_api_response_empty_returns_empty():
     assert _parse_api_response({"searchResults": {"documentResultList": []}}, "test") == []
 
 
+def test_parse_api_response_ruling_text_is_none():
+    results = _parse_api_response(_SAMPLE_API_RESPONSE, "Siri Angel")
+    for r in results:
+        assert r["ruling_text"] is None, "SAIJ returns no real sumario text"
+
+
 def test_parse_api_response_skips_record_without_actor():
     data = {
         "searchResults": {
