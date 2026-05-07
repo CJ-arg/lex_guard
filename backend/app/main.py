@@ -120,8 +120,8 @@ async def extract(req: ExtractRequest):
 async def investigate(req: InvestigateRequest):
     try:
         results = await investigate_citations(req.citations)
-    except Exception:
-        raise HTTPException(status_code=500, detail="La verificación falló. Intente nuevamente.")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Investigation failed: {exc}")
 
     return {"citations": results}
 
